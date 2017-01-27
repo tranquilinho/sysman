@@ -1,0 +1,20 @@
+#!/bin/bash
+
+# Do a backup of all PostgreSQL databases in localhost
+
+readonly date=$(date +%F)
+# !!!! customizable backup_dir, db_list, compressor (currently gzip) and log_file - script parameters?
+readonly backup_dir="/home/postgres_backup"
+readonly log_file=/var/log/postgres_backup.log
+# To get a list of databases, run "psql -l"
+readonly db_list=/etc/postgres_db_list
+
+umask 077
+
+cat ${db_list}  | while read db; do
+    backup_file=${backup_dir}/${db}_psql_${date}.bck.gz
+    echo "${date} Doing backup of ${db} to ${backup_file}..." >> ${log_file}
+    su postgres -c "pg_dump ${db} | gzip -c > ${backup_file}"
+done
+
+su postgres -c "pg_dumpall | gzip -c > ${backup_dir}/all_psql_${date}.bck.gz"
