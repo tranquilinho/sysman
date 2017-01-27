@@ -1,6 +1,9 @@
 #!/bin/bash
 
 # Do a backup of all PostgreSQL databases in localhost
+# !!!! Add versioning of the backup
+# !!!! Refactor all DB backup scripts into one (after all, they share the same core...)
+
 
 readonly date=$(date +%F)
 # !!!! customizable backup_dir, db_list, compressor (currently gzip) and log_file - script parameters?
