@@ -1,0 +1,87 @@
+#!/bin/bash
+
+# Update the backup database (using update_backup_db) and send a report of the backups
+#
+
+ADMIN_EMAIL="jcuenca@cnb.csic.es"
+BACKUP_REPORT=`mktemp`
+WD=/etc/cron_scripts
+BACKUP_DB=$WD/backup_log.db
+DB=inventory
+DEBUG=0
+
+ONLY_PRINT=0
+
+if [ "xx$1" == "xxprint" ]
+then
+	ONLY_PRINT=1
+elif [ "xx$1" == "xxlast_seen" ]
+then
+	if [ $DEBUG -ne 0 ]; then echo 1;fi
+
+	QUERY="select computer.name,last_seen,exclude_backup from computer join computer_type on computer.type = computer_type.name where retired is null and and category = 'Computer' order by computer.name;"
+ 	echo "$QUERY" |  mysql --ssl --ssl-ca=/etc/cron_scripts/ca-cert.pem -h $MYSQL_HOST --user=$MYSQL_USER --password=$MYSQL_PASS $DB | sed 1d
+	exit 0
+else
+	$WD/update_backup_db
+fi
+
+
+# Generate report from backup DB
+
+#echo "Module            Count S(B) Received(B)  Total(MB)     Last backup" > /tmp/backup_log_summary
+# sort -n -k6 < /tmp/backup_log_summary.tmp >> /tmp/backup_log_summary
+
+echo "Computers without backup for more than a week" >> $BACKUP_REPORT
+echo >> $BACKUP_REPORT
+# Run the query and prettify it adding a header and beautiful formatting with column
+column -s "|" -t <(echo "module|date|last_seen") <(sqlite3 $BACKUP_DB "select backup.module, max(backup.date) as last,computers.last_seen from backup JOIN active_modules JOIN computers on backup.module=active_modules.module AND active_modules.computer=computers.name group by backup.module having julianday('now') - julianday(last) > 7 ORDER BY last ASC") >> $BACKUP_REPORT
+if [ $DEBUG -ne 0 ]; then echo 5;fi
+sqlite3 $BACKUP_DB "select module from active_modules where module not in (select module from backup) order by module" >> $BACKUP_REPORT
+if [ $DEBUG -ne 0 ]; then echo 6;fi
+sqlite3 $BACKUP_DB "select name from computers except select computer from active_modules order by name" >> $BACKUP_REPORT
+if [ $DEBUG -ne 0 ]; then echo 7;fi
+
+echo >> $BACKUP_REPORT
+echo "Last week statistics" >> $BACKUP_REPORT
+echo >> $BACKUP_REPORT
+echo "Top users (total size)" >> $BACKUP_REPORT
+echo >> $BACKUP_REPORT
+
+column -s "|" -t <(echo "Module|Avg transfer size (MB)|Total backup size (MB)|") <(sqlite3 $BACKUP_DB "select module, round(AVG(size)/(1024*1024)),round(max(total)/(1024*1024)) as total_size from backup where julianday('now') - julianday(date) < 7  GROUP BY module ORDER BY total_size DESC LIMIT 10") >> $BACKUP_REPORT
+
+if [ $DEBUG -ne 0 ]; then echo 8;fi
+
+echo >> $BACKUP_REPORT
+echo "Top users (transfer)" >> $BACKUP_REPORT
+echo >> $BACKUP_REPORT
+
+column -s "|" -t <(echo "Module|Total transfer size (MB)|Total backup size (MB)|") <(sqlite3 $BACKUP_DB "select module, round(sum(size)/(1024*1024)) as transfer_size,round(max(total)/(1024*1024)) as total_size from backup where julianday('now') - julianday(date) < 7  GROUP BY module ORDER BY transfer_size DESC LIMIT 10") >> $BACKUP_REPORT
+
+if [ $DEBUG -ne 0 ]; then echo 9;fi
+
+echo >> $BACKUP_REPORT
+echo "Strange transfers" >> $BACKUP_REPORT
+echo >> $BACKUP_REPORT
+
+echo >> $BACKUP_REPORT
+echo "Last backups" >> $BACKUP_REPORT
+echo >> $BACKUP_REPORT
+$WD/show_last_backups >> $BACKUP_REPORT
+if [ $DEBUG -ne 0 ]; then echo 10;fi
+echo >> $BACKUP_REPORT
+
+cd $WD
+column -s "|" -t <(echo "Module|Stddev transfer (MB)|") <(./outlier_transfers.pl) >> $BACKUP_REPORT
+if [ $DEBUG -ne 0 ]; then echo 11;fi
+cd - > /dev/null
+
+if [ $ONLY_PRINT -eq 1 ]
+then
+	cat $BACKUP_REPORT
+else
+	# Send it by e-mail
+	mail -s "Backup summary `date +%d/%m/%Y`" $ADMIN_EMAIL < $BACKUP_REPORT
+fi
+
+rm $BACKUP_REPORT

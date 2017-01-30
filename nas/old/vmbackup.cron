@@ -1,0 +1,23 @@
+#!/bin/bash
+
+CONFIG_DIR=/etc/san/vmbackups
+CONFIG=$CONFIG_DIR/`hostname`
+LOG=/var/log/vmbackup.log
+
+if [ ! -f $CONFIG ]
+then
+	echo VM backup config file $CONFIG not found
+	exit 1
+fi
+
+mail -s "Vmbackup deprecated" jcuenca@cnb.csic.es <<EOF
+Vmbackup is deprecated - please use vmservicebackup instead
+EOF
+exit 0
+
+cat $CONFIG | while read VG LV TARGET
+do
+	echo VM backup started `date` >> $LOG
+	/etc/san/vmbackup $VG $LV $TARGET >> $LOG
+	echo VM backup finished `date` >> $LOG
+done
