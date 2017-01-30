@@ -1,0 +1,122 @@
+#!/bin/bash
+
+# for host-ip resolution
+# . deployer service.cfg
+
+[ -z "${sysman_scripts_dir}" ] && readonly sysman_scripts_dir=$(dirname $0)
+[ -z "${SYSMAN_ETC}" ] && readonly SYSMAN_ETC=/etc/sysman
+[ -z "${SYSMAN_LOGDIR}" ] && readonly SYSMAN_LOGDIR=/var/log
+
+. ${sysman_scripts_dir}/misc.sh
+
+# !!!! Add sudo alternative
+remote_user=root
+# default server list
+server_file=${SYSMAN_ETC}/servers.all
+dsh_log=${SYSMAN_LOGDIR}/dsh.log
+
+
+print_usage(){
+    echo "Syntax $0 [ -f server_file -l server_comma_list -o log_file -v -h] -c command"
+    echo "Example: $0 my_servers -v -l host1,host2 -c \"ls -l /etc\""
+    exit 1
+}
+
+declare -A ports
+
+load_servers(){
+    local my_server_file=$1
+    local i=0
+
+    # using BASH_REMATCH as a tech demo ^_^ 
+    # (for the simple server file format, a simple "read server port" would work too)
+    # To avoid ugly escapes, save the regex in a var
+    local pattern="([^ ]*) ?(.*)?"
+
+    while read line; do
+	if [[ "${line}" =~ ${pattern} ]]; then
+            local server=${BASH_REMATCH[1]}
+	    local   port_list="${BASH_REMATCH[2]}"
+	    servers[i]=${server}
+	    ports[${server}]="${port_list:-22}"
+	    (( i = i + 1 ))
+	fi
+    done < ${my_server_file}
+}
+
+
+
+if [ $# -ge 2 ]; then
+    while getopts "f:l:u:c:o:vh" options; do
+	case "${options}" in
+	    v)
+		readonly verbose=0
+		;;
+	    h)
+		print_usage
+		;;
+	    f)
+		server_file=${OPTARG}
+		;;
+	    o)
+		dsh_log=${OPTARG}
+		;;
+	    l)
+		declare -a servers=($(echo ${OPTARG} | tr "," "\n"))
+		;;
+	    u)
+		remote_user=${OPTARG}
+		;;
+	    c)
+		readonly cmd="${OPTARG}"
+		;;
+	    *)
+		echo Unknown option
+		print_usage
+	esac
+	done
+else
+    print_usage
+fi
+
+[ -z "${cmd}" ] && print_usage
+
+log_file=${dsh_log}
+
+if [ -z "${servers}" ]; then
+    readonly tmp_file=$(mktemp)
+    grep -v "#" ${server_file} > ${tmp_file}
+    load_servers ${tmp_file}
+    rm ${tmp_file}
+fi
+
+failed=""
+for server in "${servers[@]}"; do
+    for port in ${ports[${server}]:-22}; do
+	port_param="-p ${port}"
+
+	host="${server}:${port}"
+	log_facility="dsh ${host}"
+
+	if [ ${verbose} ]; then
+	    ip_hostname=($(grep ${server} ${etc_dir}/hosts))
+	    ip=${ip_hostname[1]}
+	    [ -n "${ip}" ] && aligned_ip=$( printf "%-20s" "${ip}")
+	    echo "${host}> ${cmd}" | logalize ${dsh_log}
+	fi
+
+	# check if we have access
+	ssh -o ConnectTimeout=1 -o StrictHostKeyChecking=no -o PasswordAuthentication=no ${port_param} ${remote_user}@${server} "date" 2>&1 > /dev/null
+	if [ $? -eq 255 ]; then
+	    log "${critical} Problem connecting to ${server}:${port_param}"
+	else
+	    ssh -o ConnectTimeout=1 -o StrictHostKeyChecking=no ${port_param} ${remote_user}@${server} "${cmd}" 2>&1 | logalize ${dsh_log} | while read output_line; do
+	# !!!! adapting logalize, this local printing would not be necessary
+		printf "%16s %s %s\n" "${host}" "${aligned_ip}" "${output_line}"
+	    done
+	    [ ${PIPESTATUS[0]} -ne 0 ] && failed="${failed},${host}"
+	fi
+    done
+done
+
+[ -n "${failed}" ] && echo && echo "WARNING: command failed in: ${failed}" | logalize ${dsh_log}
