@@ -1,0 +1,102 @@
+#!/bin/bash
+
+# based on http://www.commandlinefu.com/commands/view/8722/replace-duplicate-files-by-hardlinks
+
+# Currently, each deduplication runs one perl session, which is "killing" for thousands of files
+# Hence, it makes sense that by default only "big" (>1MB) files are deduplicated 
+
+# bytes
+readonly big_size=$((1024 * 1024))
+
+print_usage(){
+    echo "Syntax:"
+    echo "   $0 -d dir_to_dedup [-f dedup_list ] [-a (dedup also small files)] [-D (delete dupes)]"
+    exit 2
+}
+
+# relative path from dir $1 to file/dir $2
+# http://stackoverflow.com/questions/2564634/convert-absolute-path-into-relative-path-given-a-current-directory-using-bash
+# http://unix.stackexchange.com/questions/85060/getting-relative-links-between-two-paths
+# example: relpath a/b/c/dir a/e/file -> ../../../e/file
+relpath(){
+    local base=$1
+    local p=$2
+    # python relpath is for directories...
+    # python -c "import os.path; print os.path.relpath('$1','${2:-$PWD}')" ;
+    perl -MFile::Spec -e "print File::Spec->abs2rel(q($p),q($base))"
+}
+
+is_big(){
+    local file=$1
+    if [ -f ${file} ]; then
+	local size=$(stat -c%s ${file})
+	if [ ${size} -ge ${big_size} ]; then 
+	    return 0
+	fi
+    fi
+    return 1
+}
+
+while getopts "d:f:aD" options; do
+    case "${options}" in
+	f)
+	    dedup_list=${OPTARG}
+	    ;;
+	d)
+	    dir=${OPTARG}
+	    ;;
+	a)
+	    readonly dedup_all_files=1
+	    ;;
+	D)
+	    readonly delete_dup_files=1
+	    ;;
+
+    esac
+done
+
+[ -z "${dir}" ] && print_usage
+
+readonly time=$(date +%s)
+
+if [ -z "${dedup_list}" ]; then
+    readonly dedup_list=${dir}/.dedup-${time}
+    # with -1 all dups would appear in a single line
+    fdupes -r ${dir} > ${dedup_list}
+fi
+
+declare -a dupes
+i=0
+cat ${dedup_list} | while read f; do
+      if [ -z "${f}" ]; then 
+      	  # ls -lh ${dupes[@]}
+	  s=$(( i - 1))
+	  i=0
+	  # echo "${dupes[j]} ->"
+	  if is_big "${dupes[0]}" || [ -n "${dedup_all_files}" ]; then
+	      for j in $(seq 1 ${s}); do
+	      #echo "Dedup ${dupes[j]}"
+		  echo -n "."
+		  if [ -L "${dupes[j]}" ]; then
+		  # Recreate the symlink
+		      rm "${dupes[j]}"
+		      ln -s $(relpath $(dirname "${dupes[j]}") "${dupes[0]}") "${dupes[j]}"
+		      [ -f "${dupes[j]}_dupe" ] && mv "${dupes[j]}_dupe" "${dupes[j]}_dupe2"
+		  elif [ -f  "${dupes[j]}" ]; then
+		      if [ -n "${delete_dup_files}" ]; then
+			  rm "${dupes[j]}"
+		      else
+			  mv "${dupes[j]}" "${dupes[j]}_dupe"
+		      fi
+		  # relative symlinks are relative to the parent of the symlink....
+		      ln -s $(relpath $(dirname "${dupes[j]}") "${dupes[0]}") "${dupes[j]}"
+		  fi
+	      done
+	  fi
+      else
+	  dupes[$i]="${f}"
+	  (( i++ ))
+      fi
+done
+
+
