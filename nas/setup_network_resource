@@ -1,0 +1,98 @@
+#!/bin/bash
+
+[ -z "${sysman_scripts_dir}" ] && readonly sysman_scripts_dir="$(dirname $0)/../.."
+[ -z "${SYSMAN_LOGDIR}" ] && readonly SYSMAN_LOGDIR=/var/log
+readonly log_file=${SYSMAN_LOGDIR}/san.log
+readonly log_facility="nas"
+
+. ${sysman_scripts_dir}/misc.sh
+
+# error codes
+readonly already_setup=8
+readonly syntax_error=1
+
+print_usage(){
+    echo "Syntax:"
+    echo "   $0 -v dst_vg -l dst_lv -s size -p path [-f nfs_clients] [-t fstype]"
+    echo "Example:"
+    echo "   $0 -v vg3 -l joe-backup -s 30G -p /nas/backup/joe -f host1,host2 -t xfs"
+    exit ${syntax_error}  
+}
+
+fstype="ext4"
+nfshosts="-"
+
+if [ "$#" -ge 8 ]; then
+    while getopts "v:l:s:p:f:t:" options; do
+	case "${options}" in
+            v)
+		readonly vg=${OPTARG}
+		;;
+	    l)
+		readonly lv=${OPTARG}
+		;;
+	    s)
+		readonly size=${OPTARG}
+		;;
+	    p)
+		readonly netpath=${OPTARG}
+		;;
+	    f)
+		nfshosts=${OPTARG}
+		;;
+	    t)
+		fstype=${OPTARG}
+		;;
+	esac
+    done
+else
+    print_usage
+fi
+
+dup=0
+
+# The space after ${lv} is necessary as to ensure an exact match
+# when there are many volumes that share the beginning, like joe-work and joe-work-extra
+# Also, using readonly alters $? (readonly succeeds -> $? = 0)
+mvol=$( ${nas_scripts_dir}/netrsc/find_mounted_volume.sh "${lv} " )
+if [ $? -ne 0 ]; then
+    log "${warning} Resource ${lv} already setup"
+    echo ${mvol}
+    echo ${mvol} | grep ${vg} > /dev/null
+    if [ $? -eq 0 ]; then	
+	# Same volume group
+	exit ${already_setup}
+    else
+	log "${warning} Creating another resource ${lv} at ${vg}"
+	dup=1
+    fi
+fi
+
+readonly step1="lvcreate -L ${size} --name ${lv} ${vg}"
+eval_and_log "${step1}" || exit $?
+
+readonly lvpath=/dev/${vg}/${lv}
+if [ ${fstype} == "ext4" ]; then
+    mkfsopts="-m 1"
+fi
+readonly step2="mkfs -t ${fstype} ${mkfsopts} ${lvpath}"
+eval_and_log "${step2}"
+
+readonly step3="mkdir -p ${netpath}"
+eval_and_log "${step3}"
+
+readonly step4="mount ${lvpath} ${netpath}"
+eval_and_log "${step4}"
+
+if [ ${dup} -eq 0 ]; then
+    # Skip fsck on boot
+    fsckpass=0
+    readonly step5="echo \"${lvpath} ${netpath} ${fstype} defaults 0 ${fsckpass} \" >> /etc/fstab"
+    eval_and_log "${step5}"
+    if [ ${nfshosts} != "-" ]; then
+	readonly step6="${nas_scripts_dir}/netrsc/create_nfs_export.sh ${netpath} ${nfshosts}"
+	eval_and_log "${step6}"
+    fi
+fi
+
+echo "Remember to setup a backup if needed..."
