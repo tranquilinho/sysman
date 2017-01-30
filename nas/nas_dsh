@@ -1,0 +1,26 @@
+#!/bin/bash
+
+[ -z "${sysman_scripts_dir}" ] && readonly sysman_scripts_dir=$(dirname $0)/..
+[ ! -f ${SYSMAN_ETC}/nas_servers ] && echo "Missing ${SYSMAN_ETC}/nas_servers file" && exit 2
+
+
+
+if [ $# -ge 2 ]; then
+    while getopts "f:l:u:c:o:v" options; do
+	case "${options}" in
+	    # the command in OPTARG may contain quotes, which are not easy to keep
+	    # with this parsing, we keep the -c cmd as is, and pass all other parameters
+	    c)
+		readonly cmd="${OPTARG}"
+		;;
+	    *)
+		params="-${options} ${OPTARG} ${params}"
+		;;
+	esac
+    done
+else
+    ${sysman_scripts_dir}/dsh -h
+fi
+
+
+${sysman_scripts_dir}/dsh -f ${SYSMAN_ETC}/nas_servers -c "${cmd}" ${params}
