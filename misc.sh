@@ -1,13 +1,13 @@
 # Base library (misc functions)
 # !!!! Refactor into smaller, purpose specific libs?
 
-readonly sysman_scripts_dir=$(dirname ${BASH_SOURCE[@]})
+[ -z "${sysman_scripts_dir}" ] && readonly sysman_scripts_dir=$(dirname ${BASH_SOURCE[@]})
 
 # log_file should be responsability of each script
 #readonly log_dir=${sysman_scripts_dir}/log
 # [ -z "${log_file}" ] && readonly log_file=${log_dir}/sysman.log
 
-. ${sysman_scripts_dir}/psscripts_common
+. ${sysman_scripts_dir}/psscripts_common.sh
 
 readonly nas_scripts_dir=${sysman_scripts_dir}/nas
 readonly remote_nas_scripts_dir=/etc/sysman/nas
