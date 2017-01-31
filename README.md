@@ -18,3 +18,5 @@ Nice example of style guide: https://google.github.io/styleguide/shell.xml
 # Archive
 
 Branch 'old' contains some ancient scripts (like iSCSI NAS integration, DRBD management... that may still be useful)
+
+Copyright: Jesus Cuenca (jesus.cuenca@gmail.com) - Biocomputing Unit/CNB-CSIC
