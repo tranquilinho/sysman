@@ -43,6 +43,7 @@ else
     print_usage
 fi
 
+# !!!! make mountdir configurable
 readonly mountdir=/snapshot/${from_vg}/${from_lv}
 readonly lvsnapshotpath=/dev/${from_vg}/vmsnapshot
 readonly RSYNC_MAX_TIME=7200
@@ -50,17 +51,17 @@ readonly RSYNC_MAX_TIME=7200
 log "${info} Vmbackup started (${from_vg}/${from_lv}->${to_server_url})"
 case "${vm_kind}" in
     esx)
-	${nas_scripts_dir}/create_snapshot -v ${from_vg} -l ${from_lv}
+	${nas_scripts_dir}/snapshot_create -v ${from_vg} -l ${from_lv}
 	# !!!! add & test watchdog ${RSYNC_MAX_TIME}
 	rsync -av --exclude /broken_vmdk --exclude "*.vswp" --inplace ${mountdir}/ ${to_server_url}
 	;;
     vbx)
-	${nas_scripts_dir}/create_snapshot.sh -v ${from_vg} -l ${from_lv}
+	${nas_scripts_dir}/snapshot_create -v ${from_vg} -l ${from_lv}
 	# !!!! add & test watchdog ${RSYNC_MAX_TIME}
 	rsync -av -e "ssh -c arcfour" --exclude "*.vswp" --inplace ${mountdir}/ ${to_server_url}
 	;;
     xen)
-	${nas_scripts_dir}/create_snapshot.sh -v ${from_vg} -l ${from_lv} -n
+	${nas_scripts_dir}/snapshot_create -v ${from_vg} -l ${from_lv} -n
 	# currently rsync requires a patch for copying block devices, and its performance is said to be quite poor...
 	readonly to_server=$(expr match "${to_server_url}"  "\(.*\):.*")
 	readonly to_path=$(expr match "${to_server_url}"  ".*:\(.*\)")
@@ -74,4 +75,4 @@ esac
 
 log "${info} Vmbackup finished (${from_vg}/${from_lv}->${to_server_url})"
 
-${nas_scripts_dir}/release_snapshot.sh -v ${from_vg} -l ${from_lv}
+${nas_scripts_dir}/snapshot_release -v ${from_vg} -l ${from_lv}
