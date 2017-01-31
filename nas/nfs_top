@@ -1,0 +1,6 @@
+#!/bin/bash
+
+# NFS stats (read and write, in KB/s)
+while [ 1 ]; do
+    ./nfs_io_5sec.sh
+done

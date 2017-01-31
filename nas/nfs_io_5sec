@@ -1,0 +1,9 @@
+#!/bin/bash
+# Print NFS stats (read and write, in KB/s)
+nfsstat_begin=`grep ^io /proc/net/rpc/nfsd`
+rcstat_begin=`grep ^rc /proc/net/rpc/nfsd`
+sleep 5
+nfsstat_end=`grep ^io /proc/net/rpc/nfsd`
+rcstat_end=`grep ^rc /proc/net/rpc/nfsd`
+echo $nfsstat_begin $nfsstat_end | awk '{ io_read=($5 - $2)/(5*1024); io_write = ($6 - $3)/(5*1024); print io_read " " io_write}'
+echo $rcstat_begin $rcstat_end | awk '{cache_hit=($6 - $2)/5; cache_miss = ($7 - $3)/5; non_cached = ($8 - $4)/5; print  cache_hit " " cache_miss " " non_cached  }'
