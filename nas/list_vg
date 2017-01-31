@@ -1,0 +1,3 @@
+#!/bin/bash
+
+vgdisplay -c 2>/dev/null | awk 'BEGIN{FS=":";GB=1048576}/:/{name=$1;extentSize=$13;total=$14;vgfree=$16;print name " " (total*extentSize)/GB " " (vgfree*extentSize)/GB}'
