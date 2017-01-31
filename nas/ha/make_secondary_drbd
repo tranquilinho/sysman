@@ -1,0 +1,25 @@
+#!/bin/bash
+
+if [ $# -ne 1 ]
+then
+	echo Makes this host secondary \(demotes it\) for the drbd resource specified
+	echo Syntax: $0 drbd_resource
+	echo Example: $0 wwwvm 
+	exit 1
+fi
+
+RES=$1
+
+echo Please check that the resource is up to date in the peer:
+echo $RES -\> `/etc/san/ha/drbd_device.sh $RES`
+echo
+cat /proc/drbd
+echo Press Ctl-C to cancel
+read t
+
+echo Remove resource from /etc/exports and run exportfs -r
+echo Umount resource
+echo vgchange -a n resource_vg
+echo pvchange -x n /dev/drbdx
+echo drbdadm secondary resource
+

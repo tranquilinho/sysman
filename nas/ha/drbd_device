@@ -1,0 +1,15 @@
+#!/bin/bash
+
+if [ $# -ne 1 ]
+then
+	echo Shows the drbd device of a resource
+	echo Syntax: $0 resource 
+	echo Example: $0 wwwvm
+	exit 1
+fi
+
+RES=$1
+RES_DIR=/etc/san/ha/drbd
+RES_FILE=`grep -l $RES $RES_DIR/*.res`
+
+expr match "`grep 'device' $RES_FILE`" '.* \(.*\);.*'

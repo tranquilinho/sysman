@@ -1,0 +1,15 @@
+#!/bin/bash
+
+if [ $# -ne 1 ]
+then
+	echo Show the resource name of a drbd device
+	echo Syntax: $0 device 
+	echo Example: $0 /dev/drbd5
+	exit 1
+fi
+
+DEV=$1
+RES_DIR=/etc/san/ha/drbd
+RES_FILE=`grep -l $DEV $RES_DIR/*.res`
+
+expr match "`grep 'resource' $RES_FILE`" '.* \(.*\) {'

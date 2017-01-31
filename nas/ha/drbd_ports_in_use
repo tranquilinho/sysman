@@ -1,0 +1,15 @@
+#!/bin/bash
+
+if [ $# -ne 0 ]
+then
+	echo Show the active drbd ports
+	echo Syntax: $0 
+	exit 1
+fi
+
+/etc/san/ha/drbd_ip.sh -af | while read IP
+do
+	netstat -nap | awk '{print $4}' | grep $IP 
+done
+
+exit 0

@@ -1,0 +1,15 @@
+#!/bin/bash
+
+if [ $# -ne 1 ]
+then
+	echo Create and enable a drbd secondary device
+	echo Syntax: $0 resource_name 
+	echo Example: $0 joedrbd
+	exit 1
+fi
+
+RES=$1
+
+drbdadm create-md $RES
+drbdadm up $RES
+

@@ -1,0 +1,24 @@
+if [ $# -lt 5 ]
+then
+        echo Create the resource file for a drbd device
+        echo Syntax: $0 resource drbd_dev drbd_port primary_disk secondary_disk
+        echo Example: $0 webvm /dev/drbd5 7793 /dev/sdd4 /dev/sdc2 
+        exit 1
+fi
+
+RES_DIR=/etc/san/ha/drbd
+TEMPLATE=$RES_DIR/template.res
+NEW_RES=$1
+NEW_RES_FILE=$RES_DIR/$NEW_RES.res
+DEV=$2
+PORT=$3
+PRIMARY_DISK=$4
+SECONDARY_DISK=$5
+PRIMARY=faraday
+SECONDARY=euler
+PRIMARY_IP="192.168.130.127:$PORT"
+SECONDARY_IP="192.168.130.99:$PORT"
+
+sed "s,@PRIMARY_IP,$PRIMARY_IP,g;s,@SECONDARY_IP,$SECONDARY_IP,g;s:@RES:$NEW_RES:g;s:@PRIMARY_DISK:$PRIMARY_DISK:g;s:@SECONDARY_DISK:$SECONDARY_DISK:g;s:@PRIMARY:$PRIMARY:g;s:@SECONDARY:$SECONDARY:g;s:@DEV:$DEV:g" $TEMPLATE > $NEW_RES_FILE
+
+exit 0

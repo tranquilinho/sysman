@@ -1,0 +1,58 @@
+#!/bin/bash
+PEER=euler
+SCRIPTS_DIR=/etc/san/ha
+if [ $# -eq 1 ]
+then
+   if [ $# -eq 1 -a $1 == "info" ]
+   then
+	echo Requesting information...
+	echo Drbd devs in use:
+	grep cs /proc/drbd
+	echo Ports in use:
+	$SCRIPTS_DIR/drbd_ports_in_use.sh
+	echo Volume groups available:
+	echo LOCAL
+	vgs
+	echo PEER
+	ssh $PEER /etc/san/list_vg.sh
+	exit 0
+  fi
+fi
+if [ $# -lt 7 ]
+then
+	echo Create drbd volumes up to volume group \(for network resource \)
+        echo "Syntax:"
+	echo $0 info
+	echo "$0 local_vg resource_name drbd_peer peer_vg drbd_dev drbd_port size" 
+        echo Example: $0 vg3 joebackupdrbd andromeda vg4 /dev/drbd2 7793 30G 
+	exit 1
+fi
+
+SIZE=$7
+LOCALVG=$1
+RESNAME=$2
+DRBDEV=$5
+PEER=$3
+PEERVG=$4
+PORT=$6
+RES_DIR=/etc/san/ha/drbd
+RES_FILE=$RES_DIR/$RESNAME.res
+
+lvcreate -L $SIZE --name $RESNAME $LOCALVG
+ssh $PEER "lvcreate -L $SIZE --name $RESNAME $PEERVG"
+$SCRIPTS_DIR/setup_drbd_res.sh $RESNAME $DRBDEV $PORT /dev/$LOCALVG/$RESNAME /dev/$PEERVG/$RESNAME
+ln -s $RES_FILE /etc/drbd.d/
+cd /etc/san
+bzr update
+bzr add
+bzr commit -m "drbd volume"
+ssh $PEER "/etc/san/update_scripts.sh"
+ssh $PEER "ln -s $RES_FILE /etc/drbd.d/"
+drbdadm create-md $RESNAME
+drbdadm up $RESNAME
+drbdsetup $DRBDEV primary -o
+ssh $PEER "$SCRIPTS_DIR/drbd_enable_secondary.sh $RESNAME"
+pvcreate $DRBDEV
+vgcreate $RESNAME $DRBDEV
+cd -
+echo $DRBDEV is available as $RESNAME vg

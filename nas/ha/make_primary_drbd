@@ -1,0 +1,23 @@
+#!/bin/bash
+
+if [ $# -ne 1 ]
+then
+	echo Makes this host primary \(promotes it\) for the drbd resource specified
+	echo Syntax: $0 drbd_resource
+	echo Example: $0 wwwvm 
+	exit 1
+fi
+
+RES=$1
+
+echo Please check that the resource is not primary in the peer:
+echo $RES -\> `/etc/san/ha/drbd_device.sh $RES`
+echo If it is, run drbdadm secondary $RES in the peer
+echo
+cat /proc/drbd
+echo Press Ctl-C to cancel
+read t
+drbdadm primary $RES
+pvscan
+vgchange -a y
+

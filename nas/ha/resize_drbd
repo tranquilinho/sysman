@@ -1,0 +1,52 @@
+#!/bin/bash
+
+SCRIPTS_BASE=/etc/san/netrsc
+if [ $# -lt 2 ]
+then
+	echo Resize drbd volumes
+	echo To resize the network resources over them, use resize_network_resource
+	echo Syntax: $0 size volume_pattern_list
+	echo Example: $0 +10G backup john server1
+	echo Example: $0 60G work joe pc2
+	exit 1
+fi
+
+SIZE=$1
+shift
+
+LVPATH=`$SCRIPTS_BASE/find_single_volume.sh drbd "$@"`
+# VG=`expr match "$LVPATH" '/dev/mapper/\([a-zA-Z_]*\)-.*'`
+VG=`expr match "$LVPATH" '/dev/\([a-zA-Z_]*\)/.*'`
+DRBD_DEV=($(pvs | grep $VG))
+
+if [ $? -ne 0 ]
+then
+	exit $?
+fi
+
+SIZE_WITHOUT_UNITS=`echo $SIZE | sed 's_[^0-9+-]*\([+-]\?[0-9]*\)[^0-9]*_\1_g'`
+DIR=`$SCRIPTS_BASE/mountpoint_of_lv.sh $LVPATH`
+CURRENT_SIZE=`$SCRIPTS_BASE/size_network_resource.sh $DIR`
+
+if [ $SIZE_WITHOUT_UNITS -lt 0 ]
+then
+	echo Automated shrinking is disabled for drbd volumes. Proceed manually
+else 
+	echo
+	echo Resizing requires a drbd device synchronization of the new space, so the secondary might be inconsistent for a long time...
+	echo Please ensure that the drbd device $DRBD_DEV is primary in this node:
+	echo
+	cat /proc/drbd
+	echo Press Ctl-C to cancel
+	read t
+
+	for IP in `/etc/san/ha/drbd_ip.sh $DRBD_DEV`
+	do
+		echo Resizing drbd lv at $IP
+		ssh $IP "/etc/san/ha/resize_drbd_disk.sh $SIZE $DRBD_DEV" 
+	done
+	RESOURCE=`/etc/san/ha/drbd_resource.sh $DRBD_DEV`
+	drbdadm resize $RESOURCE
+	pvresize $DRBD_DEV
+fi
+

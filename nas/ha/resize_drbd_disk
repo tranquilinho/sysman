@@ -1,0 +1,30 @@
+#!/bin/bash
+
+if [ $# -lt 2 ]
+then
+	echo Resize disk of drbd device
+	echo Syntax: $0 size drdb_dev
+	echo Example: $0 +10G /dev/drbd4 
+	exit 1
+fi
+
+SIZE=$1
+DRBD_DEV=$2
+
+SIZE_WITHOUT_UNITS=`echo $SIZE | sed 's_[^0-9+-]*\([+-]\?[0-9]*\)[^0-9]*_\1_g'`
+
+if [ $SIZE_WITHOUT_UNITS -lt 0 ]
+then
+	echo Automated shrinking is disabled for drbd disks. Proceed manually
+else 
+	for DISK in `/etc/san/ha/drbd_disks.sh $DRBD_DEV`
+	do
+		if [ -b $DISK ]
+		then
+			DRBD_DISK=$DISK
+		fi
+	done
+	echo Resizing $DRBD_DISK...
+	lvresize -L $SIZE $DRBD_DISK
+fi
+

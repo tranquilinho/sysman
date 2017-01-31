@@ -1,0 +1,33 @@
+#!/bin/bash
+
+if [ $# -ne 1 ]
+then
+	echo Show the IP addresses of a drbd device \(or of all the devices in the resource repository \)
+	echo "-af shows also the port"
+	echo Syntax: $0 \[device\|-a\|-af\] 
+	echo Example: $0 /dev/drbd5
+	exit 1
+fi
+
+DEV=$1
+RES_DIR=/etc/san/ha/drbd
+
+# default pattern: only IP (no port)
+PATTERN='.* \([0-9]\+.[0-9]\+.[0-9]\+.[0-9]\+\).*'
+if [ $DEV == "-af" ]
+then
+	PATTERN='.* \([0-9]\+.[0-9]\+.[0-9]\+.[0-9]\+\:[0-9]\+\).*'
+fi
+
+if [[ $DEV == -a* ]]
+then 
+	RES_FILE=`ls $RES_DIR/*.res | grep -v template`
+else
+	RES_FILE=`grep -l $DEV $RES_DIR/*.res`
+fi
+
+grep "address"  $RES_FILE | while read L
+do
+	IP=`expr match "$L" "$PATTERN"`
+	echo $IP
+done
