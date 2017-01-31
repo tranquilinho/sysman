@@ -1,0 +1,66 @@
+#!/bin/bash
+
+[ -z "${sysman_scripts_dir}" ] && readonly sysman_scripts_dir=$(dirname $0)/..
+[ -z "${SYSMAN_LOGDIR}" ] && readonly SYSMAN_LOGDIR=/var/log
+
+readonly log_file=${SYSMAN_LOGDIR}/nas.log
+readonly log_facility="nas"
+. ${sysman_scripts_dir}/misc.sh
+
+print_usage(){
+    echo Create a snapshot of a LV
+    echo Syntax: $0 -v source_vg -l source_lv \[-n\]
+    echo "-n disables the mount of the LV"
+    echo Example: $0 -v vg4 -l vm2-os 
+    exit 1
+}
+
+
+dont_mount=0
+if [ "$#" -ge 2 ]; then
+    while getopts "v:l:n" options; do
+	case "${options}" in
+	    v)
+		readonly from_vg=${OPTARG}
+		;;
+	    l)
+		readonly from_lv=${OPTARG}
+		;;
+	    n)
+		dont_mount=1
+		;;
+            *)
+		echo "Unknow option" 1>&2 
+		print_usage
+		;;
+	esac
+    done
+    shift $((OPTIND-1))
+else
+    print_usage
+fi
+
+lvpath=/dev/${from_vg}/${from_lv}
+fstype=$(/etc/sysman/san/lv_fstype.sh ${lvpath})
+
+# !!!! make snapshot size & name configurable
+/sbin/lvcreate -L8G -s -n vmsnapshot ${lvpath}
+snapshot_dir=/snapshot/${from_vg}/${from_lv}
+log "${info} Snapshot ${lvpath} at ${snapshot_dir}"
+if [ ! -d ${snapshot_dir} ]; then
+	mkdir -p ${snapshot_dir}
+fi
+
+if [ -n "${fstype}" -a "${fstype}" == "xfs" ]; then
+	mount_options="-o nouuid"
+	mount_dir=$(${sysman_scripts_dir}/nas/mountpoint_of_lv ${lvpath})
+	xfs_freeze -f ${mount_dir}
+	log "${info} XFS $mount_dir frozen. Remember to unfreeze it"
+fi
+
+if [ ${dont_mount} -eq 0 ]; then
+    mount -t ${fstype} ${mount_options} /dev/${from_vg}/vmsnapshot ${snapshot_dir}
+fi
+
+log "${info} Snapshot available at ${snapshot_dir}"
+echo "Don't forget to release the snapshot..."
