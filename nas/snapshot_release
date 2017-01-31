@@ -1,0 +1,61 @@
+#!/bin/bash
+
+[ -z "${sysman_scripts_dir}" ] && readonly sysman_scripts_dir=$(dirname $0)/..
+[ -z "${SYSMAN_LOGDIR}" ] && readonly SYSMAN_LOGDIR=/var/log
+
+readonly log_file=${SYSMAN_LOGDIR}/nas.log
+readonly log_facility="nas"
+. ${sysman_scripts_dir}/misc.sh
+
+
+print_usage(){
+    echo "Release a snapshot of a LV"
+    echo "Syntax: $0 -v source_vg -l source_lv"
+    echo "Example: $0 -v vg4 -l vm2-os" 
+    exit 1
+}
+
+
+dont_mount=0
+
+if [ "$#" -ge 2 ]; then
+    while getopts "v:l:" options; do
+	case "${options}" in
+	    v)
+		readonly from_vg=${OPTARG}
+		;;
+	    l)
+		readonly from_lv=${OPTARG}
+		;;
+            *)
+		echo "Unknow option" 1>&2 
+		print_usage
+		;;
+	esac
+    done
+    shift $((OPTIND-1))
+else
+    print_usage
+fi
+
+lvpath=/dev/${from_vg}/${from_lv}
+fstype=$( ${sysman_scripts_dir}/nas/lv_fstype.sh ${lvpath} )
+
+mountdir=/snapshot/${from_vg}/${from_lv}
+
+if mountpoint -q ${mountdir} ; then
+    echo unmounting ${mountdir}
+    umount ${mountdir}
+    if [ $? -ne 0 ]; then
+	log "${critical} Problem unmounting..."
+    fi
+fi
+
+/sbin/lvremove -f /dev/${from_vg}/vmsnapshot 
+log "${info} Snapshot in ${from_vg} removed"
+
+if [ -n "${fstype}" -a "${fstype}" == "xfs" ]; then
+	mountdir=$(${sysman_scripts_dir}/nas/netrsc/mountpoint_of_lv ${lvpath})
+	xfs_freeze -u ${mountdir}
+	log "${info} XFS ${mountdir} unfrozen"
+fi
