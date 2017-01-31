@@ -14,3 +14,7 @@ File names should use "_" to separate words
 TODOs are marked with !!!!
 
 Nice example of style guide: https://google.github.io/styleguide/shell.xml
+
+# Archive
+
+Branch 'old' contains some ancient scripts (like iSCSI NAS integration, that may still be useful)
