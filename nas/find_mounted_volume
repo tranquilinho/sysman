@@ -1,0 +1,14 @@
+#!/bin/bash
+
+return_count=0
+[ "${1:-missing}" == "-q" ] && return_count=1 && shift
+
+# $@ keeps the spaces in pattern
+for pattern in "$@"; do
+	cmd_chain="${cmd_chain} | grep \"${pattern}\""
+done
+cmd_chain="cat /etc/mtab ${cmd_chain}"
+eval ${cmd_chain} | grep -v "#" | awk 'BEGIN{i=0}{print $1;i++}END{exit i}'
+count=$?
+[ ${return_count} -eq 1 ] && exit ${PIPE_STATUS[0]}
+exit ${count}
