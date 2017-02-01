@@ -1,6 +1,6 @@
 #!/bin/bash
 # VERSION: 1.4.4 win
-VERSION=1.4.4
+VERSION=1.4.5
 #
 # CREDITS
 # Original from: http://www.mikerubel.org/computers/rsync_snapshots/
@@ -271,7 +271,7 @@ backup(){
 		
 		if [ $SKIP_BACKUP -eq 0 ]
 		then
-			$RSYNC -rtz -e $SSH --exclude-from=$EXCLUDES --delete --delete-excluded $WHAT $REMOTE_USER@$SERVER::$REMOTE_MODULE &> /tmp/rsync_backup.log.tmp
+			$RSYNC -rtz -e $SSH --exclude-from=$EXCLUDES --backup --backup-dir=snapshot --delete --delete-excluded $WHAT $REMOTE_USER@$SERVER::$REMOTE_MODULE &> /tmp/rsync_backup.log.tmp
 			$CAT /tmp/rsync_backup.log.tmp >> $LOG_FILE
 		fi
 
