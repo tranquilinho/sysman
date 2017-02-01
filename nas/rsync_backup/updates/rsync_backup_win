@@ -1,0 +1,330 @@
+#!/bin/bash
+# VERSION: 1.4.4 win
+VERSION=1.4.4
+#
+# CREDITS
+# Original from: http://www.mikerubel.org/computers/rsync_snapshots/
+# Customized by Jesus Cuenca
+#
+# DESCRIPTION
+# Backup a directory using rsync (Cygwin version)
+#
+# CHANGES
+#    Release 1.4
+# - autoupdate from update server, both the program code and the backup configuration. Updates are downloaded
+#   without ssh, to be able to download updates even if there are server key problems
+# - new configuration scheme (6 files: see below)
+# - both local and remote logging of the same messages (the local log is rsynced to the server)
+#
+# TODO
+# - autoupdate of schedule and backup config
+# - autoretry mechanism (in case a schedule cannot be met)
+# - configurable backup server
+# - mechanism to preserve autoupdates in case of script corruption
+# - add network connection event as a trigger to start the script (for road warriors)
+# - learn mode: measure computer's power on times and then estimate the best moment to perform the backup
+# - unify linux / windows / mac versions
+# - improve code style & legibility
+# - self recovery mechanism in case a script update brokes the script and henceforth it cannot update to a working version again
+#
+# CONFIG FILES
+#   backup -- module + sources
+#   rsync_excludes -- local file exclussion
+#   server_key -- backup server ssh host key
+#   schedule -- when to do backups (cron format)
+#   ruser -- remote user for ssh connections
+#   pass -- rsync secrets password (for setups where there's no host restriction
+
+unset PATH
+
+# This script needs the following programs
+RSYNC=/usr/bin/rsync
+SU=/bin/su
+CDS=/usr/local/bin/check_dangling_symlink
+DATE=/bin/date
+SSH=/usr/bin/ssh
+CAT=/usr/bin/cat
+RM=/usr/bin/rm
+GREP=/usr/bin/grep
+SLEEP=/usr/bin/sleep
+CP=/usr/bin/cp
+MV=/usr/bin/mv
+DIRNAME=/usr/bin/dirname
+EXPR=/usr/bin/expr
+SED=/usr/bin/sed
+MKDIR=/usr/bin/mkdir
+MKTEMP=/usr/bin/mktemp
+CRONTAB=/usr/bin/crontab
+
+# Global variables
+WORKING_DIR=/etc/cron_scripts
+RUSER=$WORKING_DIR/ruser
+PASS=$WORKING_DIR/pass
+if [ -f $PASS ]
+then
+	export RSYNC_PASSWORD=`$CAT $PASS`
+fi
+
+cd $WORKING_DIR
+
+# For what OS this version of the script is intended. Supported platforms: linux,osx,win
+TARGET_OS=win
+
+# The name of the file that will be downloaded from the server to update the current version of the program
+UPDATE_NAME=rsync_backup_$TARGET_OS
+
+SKIP_BACKUP=0
+
+SERVER_KEY=server_key
+
+KNOWN_HOSTS=$HOME/.ssh/known_hosts
+
+LOG_FILE=/var/log/rsync_backup.log
+
+# This file contains the date and time of last check for updates, in seconds since 1970
+LAST_UPDATE_CHECK_FILE=.last_update_check
+
+# How frequently to check for updates, in seconds. 86400 seconds == 1 day
+UPDATE_CHECK_PERIOD=86400
+
+BACKUP_CONFIG=backup
+
+EXCLUDES=rsync_excludes
+
+WHAT_CFG=$HOME/.rsync_what.cfg
+
+RM_CFG=$HOME/.rsync_remote_module.cfg
+
+SOURCE_DIR=/cygdrive/
+
+SERVER=disco.cnb.csic.es
+SERVER_SHORT=disco
+
+REMOTE_USER=root
+if [ -f $RUSER ]
+then
+	REMOTE_USER=`$CAT $RUSER`
+fi
+
+UPDATE_MODULE=updates
+
+update(){
+	# perform all the self-update functions
+	# 1) download latest version if newer
+	
+	UPDATED=0
+	ERROR=0
+	
+	# check updates once in a UPDATE_CHECK_PERIOD 
+	CURRENT_DATE=`$DATE +%s`
+	
+	if [ -f $LAST_UPDATE_CHECK_FILE ]
+	then
+		LAST_UPDATE_CHECK=`$CAT $LAST_UPDATE_CHECK_FILE`
+	else
+		# If there were not any check, force an update check
+		LAST_UPDATE_CHECK=`$EXPR $CURRENT_DATE - $UPDATE_CHECK_PERIOD`
+	fi
+	
+	TIME_SINCE_LAST_UPDATE_CHECK=`$EXPR $CURRENT_DATE - $LAST_UPDATE_CHECK`
+
+	if [ $TIME_SINCE_LAST_UPDATE_CHECK -ge $UPDATE_CHECK_PERIOD ]
+	then
+		echo Checking for updates...
+		update_server_key
+		ERROR=`$EXPR $ERROR + $?`
+		
+		# rsync compares current version and remote version by CRC ( -c option)
+		 $RSYNC -avnc $REMOTE_USER@$SERVER::$UPDATE_MODULE/$UPDATE_NAME . | $GREP $UPDATE_NAME
+		 if [ $? -eq 0 ]
+		 then
+		 		# there's a new version
+		 		echo Downloading updates...
+		 		$RSYNC -a $REMOTE_USER@$SERVER::$UPDATE_MODULE/$UPDATE_NAME $UPDATE_NAME.new
+		 		ERROR=`$EXPR $ERROR + $?`
+		 		echo Updating...
+		 		./$UPDATE_NAME.new replace_old &
+		 		UPDATED=1
+		 fi
+		 
+		 if [ $ERROR -eq 0 ]
+		 then 
+		 		# If there were no problems, register this update's date
+		 	 	echo $CURRENT_DATE > $LAST_UPDATE_CHECK_FILE
+		 fi
+		# Update config file
+		SYS_CONFIG=`$CAT sysconfig 2> /tmp/kk`
+		if [ ${SYS_CONFIG}zz != "zz" ]
+		then
+			$RSYNC -a $REMOTE_USER@$SERVER::$UPDATE_MODULE/configs/$SYS_CONFIG/ .
+			# Update cron
+			$CRONTAB cron
+		fi
+		
+	fi
+	
+	return $UPDATED
+}
+
+# Be careul with this function, since it's called from old version to new version, and it may break
+# the update process
+# Keep a copy of the previous script
+replace_old(){
+	# Give time to the old program to exit before we replace it
+	$SLEEP 2
+	$CP $UPDATE_NAME $UPDATE_NAME.old
+	$MV $UPDATE_NAME.new $UPDATE_NAME
+	echo Updated.
+}
+
+update_server_key(){
+	# The SSH host key of the server may change with time. When the key changes, all the clients refuse to connect
+	# to prevent a 'man in the middle' attack. So, it's neccesary to replace the old keys in this cases.
+		# perform all the self-update functions
+	# 1) download latest version if newer
+	
+	KNOWN_HOSTS_DIR=`$DIRNAME $KNOWN_HOSTS`
+	if [ ! -d $KNOWN_HOSTS_DIR ]
+	then
+		$MKDIR -p $KNOWN_HOSTS_DIR
+	fi
+	
+	# rsync compares current version and remote version by CRC ( -c option)
+	 $RSYNC -avnc $REMOTE_USER@$SERVER::$UPDATE_MODULE/$SERVER_KEY . | $GREP $SERVER_KEY
+	 if [ $? -eq 0 ]
+	 then
+	 		# there's a new version
+	 		echo Updating server key...
+	 		$RSYNC -a $REMOTE_USER@$SERVER::$UPDATE_MODULE/$SERVER_KEY .
+	 		
+	 		TMP_FILE=`$MKTEMP`
+	 		# Erase old key from known_hosts, then append the new
+	 		if [ -f $KNOWN_HOSTS ]
+	 		then
+	 		 		$SED -e "/$SERVER_SHORT/,/==/ d" < $KNOWN_HOSTS > $TMP_FILE
+	 		fi
+	 		$CAT $SERVER_KEY >> $TMP_FILE
+	 		$MV $TMP_FILE $KNOWN_HOSTS
+	 fi
+	 
+}
+
+check_configuration_files(){
+	# Check that configuration files exist
+	if [ ! -f $BACKUP_CONFIG ]
+	then
+		if [ -f $WHAT_CFG ]
+		then
+			# Migrate from old config format
+			# If it's missing the /cygdrive in path, add it
+			$GREP cygdrive $WHAT_CFG
+			if [ $? -ne 0 ]
+			then
+				WHAT=`$SED -e s_^_/cygdrive/_g < $WHAT_CFG | $SED -e s_\ _\ /cygdrive/_g`
+			else
+				WHAT=`$CAT $WHAT_CFG`
+			fi
+			REMOTE_MODULE=`$CAT $RM_CFG`
+			echo $REMOTE_MODULE $WHAT > $BACKUP_CONFIG
+			$MV $WHAT_CFG $WHAT_CFG.kk
+			$MV $RM_CFG $RM_CFG.kk
+		else
+			echo $BACKUP_CONFIG is missing
+			exit 1
+		fi
+	fi
+
+	if [ ! -f $EXCLUDES ]
+	then
+		echo $EXCLUDES is missing
+		exit 1
+	fi
+	
+}
+
+REMOTE_MODULE=a
+
+backup(){
+	
+	check_configuration_files
+	
+#  REMOTE_MODULE=`$CAT $RM_CFG`
+#	WHAT=`$CAT $WHAT_CFG`
+
+	# Get what to backup from config file. This old file structure is
+	# Headers
+	# $RSYNC_BACKUP SOURCE MODULE
+	# Read old file with
+	# $GREP \\\$RSYNC $BACKUP_CONFIG | $GREP -v \\\# | while read PROGRAM WHAT REMOTE_MODULE
+	
+	# New file structure allows multiple sources for one module:
+	# MODULE SOURCE1 SOURCE2...
+	# Source's paths should be absolute
+
+	
+	$CAT $BACKUP_CONFIG | while read REMOTE_MODULE WHAT
+	do
+		echo Backing up $WHAT to $REMOTE_MODULE... >> $LOG_FILE
+		# cygwin cron is affected by the output of the job, so the command must be completely quiet
+		# use -L to follow symlinks
+		# server:module -> ssh ; server::module -> rsync . So, with :: the -e option is needed
+		
+		if [ $SKIP_BACKUP -eq 0 ]
+		then
+			$RSYNC -rtz -e $SSH --exclude-from=$EXCLUDES --delete --delete-excluded $WHAT $REMOTE_USER@$SERVER::$REMOTE_MODULE &> /tmp/rsync_backup.log.tmp
+			$CAT /tmp/rsync_backup.log.tmp >> $LOG_FILE
+		fi
+
+	done
+
+	$RM /tmp/rsync_backup.log.tmp
+	
+	echo Finished `$DATE` >> $LOG_FILE
+	echo >> $LOG_FILE
+	
+}
+
+sync_log(){
+	read REMOTE_MODULE WHAT < $BACKUP_CONFIG
+	$RSYNC -a -e $SSH $LOG_FILE $REMOTE_USER@$SERVER::$REMOTE_MODULE
+}
+
+syntax(){
+	echo Syntax: $0 [COMMAND]
+	echo COMMAND can be: replace_old
+	echo If no command is specified, it does normal operations \(self-update / backup\)
+
+}
+
+############## Main
+
+
+echo $0 version $VERSION started. `$DATE`. >> $LOG_FILE
+
+# Process parameters - see syntax
+if [ $# -eq 1 ]
+then
+	# Be careful with this parameter, renaming or modifying it may break the update process
+	if [ $1 == replace_old ]
+	then
+		echo Replacing old version...
+		replace_old
+		exit 0
+	fi
+fi
+
+if [ $# -gt 1 ]
+then
+	echo Wrong number of parameters
+	syntax
+	exit 1
+fi
+
+update
+if [ $? -eq 0 ]
+then
+	# The script was not updated
+	backup
+	sync_log
+fi
+# echo Exit $$
