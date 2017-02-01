@@ -131,3 +131,22 @@ get_column(){
 random_str(){
     tr -dc _A-H-J-N-P-Z-a-h-m-z-1-9 < /dev/urandom | head -c${1:-14}
 }
+
+readonly black='\E[30;47m'
+readonly red='\E[31;47m'
+readonly green='\E[32;47m'
+readonly yellow='\E[33;47m'
+readonly blue='\E[34;47m'
+readonly magenta='\E[35;47m'
+readonly cyan='\E[36;47m'
+readonly white='\E[37;47m'
+
+
+function cecho(){
+    local message=$1
+    local color=${2:-$black} 
+    echo -ne "${color}"
+    echo -n "${message}"
+    #  tput sgr0
+    echo -e "\E[0m"
+}
