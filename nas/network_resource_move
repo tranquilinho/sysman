@@ -1,0 +1,103 @@
+#!/bin/bash
+
+[ -z "${sysman_scripts_dir}" ] && readonly sysman_scripts_dir="$(dirname $0)/../.."
+[ -z "${SYSMAN_LOGDIR}" ] && readonly SYSMAN_LOGDIR=/var/log
+readonly log_file=${SYSMAN_LOGDIR}/san.log
+readonly log_facility="nas"
+
+. ${sysman_scripts_dir}/misc.sh
+
+
+print_usage(){
+    echo "Move a network resource within a server"
+    echo "Syntax: $0 -v target_vg -f from_tags [ -s ]"
+    echo "Example: $0 -v vg4 -f work,joe,pc2"
+    echo "-s take into account real disk use (instead of netrsc size)"
+    exit 1
+}
+
+smallest_possible=0
+
+if [ "$#" -gt 0 ]; then
+    while getopts "f:v:s" options; do
+	case "${options}" in
+	    v)
+		readonly to_vg=${OPTARG}
+		;;
+	    f)
+		readonly tags_csv=${OPTARG}
+		;;
+	    s)
+		smallest_possible=1
+		;;
+            *)
+		echo "Unknow option" 1>&2 
+		print_usage
+		;;
+	esac
+    done
+    shift $((OPTIND-1))
+else
+    print_usage
+fi
+
+[ -z "${to_vg}" -o -z "${tags_csv}" ] && echo "Missing parameter" && print_usage
+
+declare -a tags
+tags=($( echo ${tags_csv} | tr "," "\n"))
+# the volume might not be mounted... search directly in lvs
+# $@ keeps the spaces in pattern
+for pattern in "${tags[@]}"; do
+	cmd_chain="${cmd_chain} | grep \"${pattern}\""
+done
+cmd_chain="lvs ${cmd_chain}"
+cmd_chain_output=($( eval ${cmd_chain} | tail -1))
+if [ ${#cmd_chain_output[@]} -lt 2 ]; then
+    echo "No volume found..."
+    exit 3
+else
+    readonly from_vg="${cmd_chain_output[1]}"
+    readonly lvpath="/dev/mapper/${from_vg}-${cmd_chain_output[0]//-/--}"
+fi
+
+readonly lvname=${cmd_chain_output[0]}
+
+if [ ${smallest_possible} -eq 0 ]; then
+    size=$(lvs | grep ${from_vg} | grep ${lvname} | awk '{print $4}')
+else
+    size=$( df -h | grep ${lvpath} | awk '{print $3}')
+fi
+
+[ -z "${size}" ] && log "${critical} unknown netrsc size" && exit 3
+
+mountpoint=$(${sysman_scripts_dir}/nas/mountpoint_of_lv ${lvpath})
+[ -z "${mountpoint}" ] && echo Mountpoint not found && exit 2
+target_mount_point=/tmp/${lvname}
+
+log "${info} Moving ${lvpath} -> ${to_vg}/${lvname}"
+
+mkdir -p ${target_mount_point}
+${sysman_scripts_dir}/network_resource_setup -v ${to_vg} -l ${lvname} -s ${size} -p ${target_mount_point}
+[ $? -ne 0 ] && log "${critical} netrsc creation failed" && exit 4
+
+
+mount /dev/${to_vg}/${lvname} ${target_mount_point}
+
+readonly rsync_log_file=${scripts_base}/log/$(date +%s).log
+log "${info} Syncing files ${mountpoint}/ ${target_mount_point}. See ${rsync_log_file}"
+rsync -av --progress ${mountpoint}/ ${target_mount_point} | logalize ${rsync_log_file}
+log "${info} Finished syncing files ${mountpoint}/ ${target_mount_point}"
+
+umount ${target_mount_point}
+umount ${mountpoint}
+
+escnewpath=$(echo ${target_mount_point} | sed 's_/_\\\/_g')
+sed -i "/${escnewpath}/d" /etc/fstab
+sed -i "s_${lvpath}_/dev/${to_vg}/${lvname}_g" /etc/fstab
+
+log "${info} /etc/fstab updated"
+
+mount ${mountpoint}
+
+echo "Remember to remove old volume if needed"
+
