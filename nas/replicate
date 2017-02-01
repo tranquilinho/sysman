@@ -1,0 +1,65 @@
+#!/bin/bash
+
+[ -z "${sysman_scripts_dir}" ] && readonly sysman_scripts_dir="$(dirname $0)/../.."
+[ -z "${SYSMAN_LOGDIR}" ] && readonly SYSMAN_LOGDIR=/var/log
+readonly log_file=${SYSMAN_LOGDIR}/replica.log
+readonly log_facility="nas"
+
+. ${sysman_scripts_dir}/misc.sh
+
+# !!!! use log function for logging
+
+log_tmp=/tmp/replica.log.tmp
+readonly one_day_seconds=86400
+
+# returns time (in seconds) since last modification to file $1
+check_last(){
+        local current_date=$(date +%s)
+
+        if [ -f $1 ]; then
+            local last_check=$(cat $1)
+        else
+            # If there were not any check, force it
+            local last_check=${one_day_seconds}
+        fi
+
+        expr ${current_date} - ${last_check}
+}
+
+if [ $# -ne 1 ]; then
+    echo "Syntax: $0 replica_cfg"
+    exit 1
+fi
+
+readonly replica_config=$1
+
+grep -v "#" ${replica_config} | while read src dst rep_freq snap_freq
+do
+    echo "$(date +"%F %T") - Backing up ${src} to ${dst}..." >> $${log_file}
+    snap_params=""
+    doin_snapshot="no"
+    if [ ${snap_freq} -gt 0 ]; then
+        last_snapshot_file=$(dirname ${dst} | tr :/ _).last_snapshot
+        snap_freq_seconds=$(expr ${snap_freq} \* 86400)
+        last_snap_sec=$(check_last ${last_snapshot_file})
+        if [ ${last_snap_sec} -ge ${snap_freq_seconds} ]; then
+	    # !!!! Really neccesary to export this vars?
+            export doin_snapshot="yes"
+            export snap_params="--backup --backup-dir=snapshot"
+            echo `date +%s` > ${last_snapshot_file}
+        fi
+    fi
+    echo "Snapshot: ${doin_snapshot} \( frequency: ${snap_freq} \)" >> $${log_file}
+
+    # In Unix it's important to keep ownership & permissions, so it's better -a than -rt
+    rsync -a --delete --delete-excluded ${snap_params} ${src} ${dst} &> ${log_tmp}
+    grep -v non-regular ${log_tmp} >> $${log_file}
+done
+
+if [ -f ${log_tmp} ]; then
+    rm ${log_tmp}
+fi
+
+echo "Finished $(date)" >> $${log_file}
+echo >> $${log_file}
+

@@ -1,0 +1,30 @@
+#!/bin/bash
+
+# !!!! allow more than 1 replica?
+[ -z "${sysman_scripts_dir}" ] && readonly sysman_scripts_dir="$(dirname $0)/../.."
+[ -z "${SYSMAN_LOGDIR}" ] && readonly SYSMAN_LOGDIR=/var/log
+readonly log_file=${SYSMAN_LOGDIR}/nas.log
+readonly log_facility="replicas"
+
+. ${sysman_scripts_dir}/misc.sh
+
+if [ $# -ne 3 ]; then
+    echo "Syntax: $0 nas_src server vg"
+    echo "Example: $0 server1 /nas/joe/work/aa server5" 
+    exit 1
+fi
+
+readonly src=$2
+readonly from_server=$1
+readonly to_server=$3
+
+if [ ${from_server} == ${to_server} ]; then
+    echo "replica stored in this same server"
+    exit 1
+fi
+
+
+readonly size=$(ssh ${from_server} "${sysman_scripts_dir}/nas/size_network_resource.sh ${src}")
+ssh ${to_server} "${sysman_scripts_dir}/nas/replica_setup_at_dst ${src} ${size}"
+ssh ${from_server} "${sysman_scripts_dir}/nas/replica_setup_at_src.sh ${src} ${to_server}"
+
