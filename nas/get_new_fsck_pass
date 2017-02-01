@@ -1,0 +1,7 @@
+#!/bin/bash
+
+biggest_pass=$(awk '/^[^#]/{print $6}' /etc/fstab | sort -n | tail -1)
+[ -z "${biggest_pass}" ] && biggest_pass=0
+
+echo $(( biggest_pass + 1))
+
