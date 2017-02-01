@@ -1,0 +1,14 @@
+#!/bin/bash
+
+[ -z "${sysman_scripts_dir}" ] && readonly sysman_scripts_dir=$(dirname $0)/..
+
+if [ $# -ne 1 ]; then
+    echo "Syntax: $0 estimated_size"
+    echo "Example: $0 20G"
+    exit 1
+fi
+
+readonly est_size=$1
+
+vgs --noheadings | sort -n -k 3 | awk -v MINSIZE=${est_size} -f ${sysman_scripts_dir}/nas/filter_vgs_sizes.awk 
+

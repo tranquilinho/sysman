@@ -1,0 +1,20 @@
+#!/bin/bash
+
+if [ $# -ne 1 ]; then
+    echo "Syntax: $0 lv_path"
+    echo "Example: $0 /dev/vg3/lv4"
+    exit 1
+fi
+
+lvpath=$1
+echo ${lvpath} | grep mapper > /dev/null
+if [ $? -ne 0 ]; then
+    readonly regex="/dev/([^/]*)/(.*)"
+    if [[ "${lvpath}" =~ ${regex} ]]; then
+	readonly vg=${bash_rematch[1]}
+	readonly lv=${bash_rematch[2]}
+	lvpath=/dev/mapper/${vg}-${lv//-/--}
+    fi
+fi
+# watch out: the second blank in [  ] is actually a literal tab
+grep "${lvpath}[ 	]" /etc/mtab | awk '{print $2}'
