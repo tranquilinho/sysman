@@ -1,0 +1,94 @@
+#!/bin/bash
+
+readonly cfg_dir=/etc/sysman/san/rsync_backup/conf
+readonly rsync_confs_dir=${cfg_dir}/rsyncd.confs
+readonly time_cfg=${cfg_dir}/backup_time
+
+print_usage(){
+    echo "Syntax:"
+    echo "   $0 -f client:path -t backup_server:path -c cfg_name [-T hour:minute]"
+    exit 1
+}
+
+readonly colon_regex="([^:]*):([^:]*)"
+
+if [ "$#" -eq 6 ]; then
+    while getopts "f:c:t:T:" options; do
+        case "${options}" in
+            f)
+                readonly client_url=${OPTARG}
+		if [[ ${client_url} =~ ${colon_regex} ]]; then
+		    readonly host=${BASH_REMATCH[1]}
+		    readonly host_path=${BASH_REMATCH[2]}
+		else
+		    print_usage
+		fi
+                ;;
+            t)
+                readonly server_url=${OPTARG}
+		if [[ ${server_url} =~ ${colon_regex} ]]; then
+		    readonly backup_server=${BASH_REMATCH[1]}
+		    readonly server_path=${BASH_REMATCH[2]}
+		else
+		    print_usage
+		fi
+                ;;
+	    c)
+		readonly cfg_name=${OPTARG}
+		;;
+	    T)
+		readonly backup_time=${OPTARG}
+		if [[ ${backup_time} =~ ${colon_regex} ]]; then
+		    readonly hour=${BASH_REMATCH[1]}
+		    readonly minute=${BASH_REMATCH[2]}
+		else
+		    print_usage
+		fi
+		;;
+            *)
+                echo "Unknow option" 1>&2 
+                print_usage
+                ;;
+        esac
+    done
+else
+    print_usage
+fi
+
+# !!!! not always the client is linux...
+readonly sysconfig=${host%%\.*}-linux
+
+readonly cfg_file=${rsync_confs_dir}/${cfg_name}
+
+if [ -f ${cfg_file} ]; then
+   echo ${cfg_file} already exists...
+   exit 2
+fi
+
+cat > ${cfg_file} <<EOF
+[${cfg_name}]
+   path = ${server_path}
+   hosts allow = ${host}
+   # backup_host=${backup_server}
+   # backup_paths=${host_path} 
+   # snapshot_freq=1
+   # include=options1
+   # sysconfig=${sysconfig}
+
+EOF
+
+
+
+cat >> ${time_cfg} <<EOF
+${sysconfig}		${hour}		${minute}
+EOF
+
+bzr add ${cfg_file}
+
+cd ${rsync_confs_dir}/..
+./split_backup_cfg.rb ${cfg_file}
+bzr add ../updates/configs/${sysconfig}
+
+bzr update
+
+bzr commit -m "backup confs - ${cfg_file}"
