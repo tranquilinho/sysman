@@ -1,0 +1,44 @@
+#!/bin/bash
+
+[ -z "${sysman_scripts_dir}" ] && readonly sysman_scripts_dir=$(dirname $0)/..
+
+if [ $# -lt 2 ]; then
+	echo "Syntax: $0 size volume_pattern_list"
+	echo "Example: $0 +10G backup john server1"
+	echo "Example: $0 60G work joe pc2"
+	exit 1
+fi
+
+readonly size=$1
+shift
+
+lvpath=$(${sysman_scripts_dir}/nas/find_single_volume "$@")
+if [ $? -ne 0 ]; then
+    exit $?
+fi
+# using readonly in lvpath declaration confuses the $? check...
+readonly lvpath
+
+readonly size_without_units=$(echo ${size} | sed 's_[^0-9+-]*\([+-]\?[0-9]*\)[^0-9]*_\1_g')
+readonly dir=$(${sysman_scripts_dir}/nas/mountpoint_of_lv ${lvpath})
+readonly current_size=$(/etc/sysman/san/size_network_resource.sh ${dir})
+readonly current_size_without_units=$(echo ${current_size} | sed 's_[^0-9+-]*\([+-]\?[0-9]*\)[^0-9]*_\1_g')
+fstype=$(/etc/sysman/san/lv_fstype.sh ${lvpath})
+
+if [ ${size:0:1} == "+" -o ${size_without_units} -ge ${current_size_without_units} ]; then
+    [ -z "${fstype}" ] && fstype=ext4
+    if [ ${fstype} == "ext4" ]; then
+	lvresize -L ${size} ${lvpath} && resize2fs ${lvpath}
+    elif [ ${fstype} == "xfs" ]; then
+	lvresize -L ${size} ${lvpath} && xfs_growfs ${lvpath}
+    fi
+else
+    if [ ${size_without_units} -lt 0 ]; then
+	new_size=$(/etc/sysman/san/size_calculator.rb ${current_size} + ${size})
+    else
+	new_size=${size}
+    fi
+    umount ${lvpath} && e2fsck -f ${lvpath} && resize2fs ${lvpath} ${new_size} && lvresize -L ${new_size} ${lvpath}
+    mount ${lvpath}
+fi
+
