@@ -1,0 +1,28 @@
+#!/bin/bash
+
+if [ $# -lt 1 ]
+then
+        echo Syntax: $0 volume_pattern_list
+        echo Example: $0 backup john server1
+        exit 1
+fi
+
+SCRIPTS_BASE=/etc/sysman/san/netrsc
+LVPATHLIST=`mktemp`
+$SCRIPTS_BASE/find_mounted_volume.sh "$@" > $LVPATHLIST
+
+LVCOUNT=`cat $LVPATHLIST | wc -l`
+if [ $LVCOUNT -gt 1 ]
+then
+        echo The pattern list matched more than one network resource:
+        cat $LVPATHLIST
+        echo Please be more specific
+        exit 2
+elif [ $LVCOUNT -eq 0 ]
+then
+        echo No resource found matching the pattern list
+        exit 1
+fi
+
+cat $LVPATHLIST
+rm $LVPATHLIST
