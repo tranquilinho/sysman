@@ -1,0 +1,118 @@
+#!/bin/bash
+# Version 1.2
+#	- no config files - just look for snapshot directories. Simpler though it misses the fine-grain
+# 	  control of a different config file for every period
+#	- don't do snapshot of directories without recent backup
+#	- report skipped directories
+
+BDIR=/etc/san/reports/
+SDIR=/etc/san/snapshots
+SNAPSHOT=$SDIR/rotate_snapshot.sh
+
+LOG_FILE=/var/log/snapshot.log
+
+# The tree root where to look for snapshot folders is
+PARENT=/nas/backup
+
+# How many copies should be kept for each period
+DAILY_COPIES=5
+WEEKLY_COPIES=2
+MONTHLY_COPIES=1
+
+print_syntax(){
+	echo Syntax: $0 daily\|weekly\|monthly
+}
+
+if [ $# -ne 1 ]; then
+    echo Wrong number of parameters
+    print_syntax
+    exit 1
+fi
+
+case $1 in
+    daily)
+	COPIES=$DAILY_COPIES
+	PDURATION=1
+	;;
+    weekly)
+	COPIES=$WEEKLY_COPIES	
+	PDURATION=7		
+	;;
+    monthly)
+	COPIES=$MONTHLY_COPIES
+	PDURATION=31			
+	;;
+    *)
+	echo Wrong period
+	print_syntax
+	exit 1
+esac
+
+PERIOD=$1
+
+MODULES_PATHS=`mktemp`
+
+# !!!! Fix extract_rsync_modules.awk location
+cat /etc/rsyncd.conf | awk -f $SDIR/extract_rsync_modules.awk > $MODULES_PATHS
+
+TODAY=`date +%m/%d/%y`
+
+echo Started at `date` >> $LOG_FILE
+$BDIR/update_backup_db
+
+# !!!! Fix date_math location
+. $SDIR/date_math.sh
+
+# Restrict the snapshot to the lines of config file that apply to current period
+find -L $PARENT -maxdepth 4 -type d -name snapshot | while read SNAPSHOT_DIR; do
+    D=$(dirname "${SNAPSHOT_DIR}")
+    DIR="${D}/${PERIOD}"
+
+    # Obtain the module of the directory. The directory may not have a module
+    # nor a recent backup
+    module_path=`grep $D $MODULES_PATHS`
+    if [ $? -eq 0 ]; then
+	module=`echo $module_path | cut -d " " -f 1`
+	# Check date of last backup for that module
+	last_backup=`$BDIR/show_last_backups --nohtml $module | tail -1 | awk '{print $2}'`
+	if [ $? -ne 0 ]; then
+		echo Problem with show_last_backups
+	else
+	  if [ ${#last_backup} -ne 0 ]; then
+	    # Check if the backup is recent
+	    # Backup date format: Y-M-d
+	    lb=$(dswap $last_backup 3 2 1 2 1 3 "-" "/" 2)
+	    dif=$(dsub $TODAY $lb)
+	    
+	    if [ $dif -le ${PDURATION} ]; then
+		${SNAPSHOT} ${DIR} ${COPIES}
+		ERR=$?
+		case ${ERR} in
+		    0)
+			SKIPPED="OK"
+			;;
+		    1)
+			SKIPPED="Skipped (no rsync snapshot found)"
+			;;
+		    2)
+			SKIPPED="Skipped (empty snapshot)"
+			;;
+		    *)
+			SKIPPED="Snapshot err: ${ERR}"
+			;;
+		esac
+	    else
+		SKIPPED="Skipped (no backup in ${dif} days)"
+	    fi
+	  else
+	    SKIPPED="Skipped (no backup found)"
+	  fi
+  	fi
+    else
+	SKIPPED="Skipped (no module in rsyncd.conf)"
+    fi
+    echo ${SKIPPED} " - " ${D} >> ${LOG_FILE}
+done 
+echo Finished at `date` >> ${LOG_FILE}
+
+rm ${MODULES_PATHS}
