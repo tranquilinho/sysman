@@ -1,0 +1,16 @@
+#!/bin/bash
+# Report backup info for all the backups stored in this host
+
+[ -z "${sysman_scripts_dir}" ] && readonly sysman_scripts_dir="$(dirname $0)/../.."
+
+# !!!! Make variable configurable
+backup_conf_dir=
+
+host=$(hostname)
+local_files=$( grep -l backup_host=${host} ${backup_conf_dir}/* )
+
+for file in ${local_files}; do
+    line=$(grep '\[' ${file} )
+    module=$( expr match "${line}" "\[\(.*\)\]")
+    ${sysman_scripts_dir}/nas/backup_info ${module}
+done
