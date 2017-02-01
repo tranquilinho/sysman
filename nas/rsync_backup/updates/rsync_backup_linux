@@ -1,49 +1,43 @@
 #!/bin/bash
-VERSION=1.6
+# VERSION: 1.4.1 Linux
+VERSION=1.4.2b
 #
 # CREDITS
 # Original from: http://www.mikerubel.org/computers/rsync_snapshots/
 # Customized by Jesus Cuenca
-#
 # DESCRIPTION
-# Backup a directory using rsync 
+# Backup a directory using rsync (Cygwin version)
 #
 # CHANGES
-#
-#    Release 1.6
-#	- merge win / linux / mac versions in a single script
-#	(pending:
-#		- automatic renaming from rsync_backup_OS to rsync_backup)
-#		- integrate back the rsync password feature
-#
-#    Release 1.5.5
-#	- snapshots scheduling (frecuency as a parameter in backup file)
-#
-#    Release 1.5
-#	- use --backup as an alternative to snapshots
+#    Release 1.4.2b
+# - added OS X support
+# - replacing the restricted program mechanism ($CP and the like) with a
+#   restricted path (should be OS dependent)
+# - autodetection of working dir, based on $0
 #
 #    Release 1.4
-#	- autoupdate from update server, both the program code and the backup configuration. Updates must be downloaded
+# - autoupdate from update server, both the program code and the backup configuration. Updates must be downloaded
 #   without ssh, to be able to download updates even if there are key problems
-#	- new configuration scheme (3 files)
-#	- use server side excludes
-#	- don't write to stdout since it confuses cron
-#	- configurable cwd RSB_CWD (for different setups, i.e. backups of usb drives)
-#	- both local and remote logging of the same messages
+# - new configuration scheme (3 files)
+# - use server side excludes
+# - don't write to stdout since it confuses cron
 #
 # TODO
-#	- autoretry mechanism (in case a schedule cannot be met)
-#	- mechanism to preserve autoupdates in case of script corruption
-#	- add network connection event as a trigger to start the script (for road warriors)
-#	- learn mode: measure computer's power on times and then estimate the best moment to perform the backup
-#	- improve code style & legibility
+# - autoupdate of schedule and backup config
+# - both local and remote logging of the same messages
+# - mechanism to preserve autoupdates in case of script corruption
+# - add network connection event as a trigger to start the script (for road warriors)
+# - learn mode: measure computer's power on times and then estimate the best moment to perform the backup
+# - unify linux / windows / mac versions
+# - improve code style & legibility
 #
-# CONFIG FILES (for this script)
+# CONFIG FILES
 #   backup -- module + sources
 #   server_key -- backup server ssh host key
 #   schedule -- when to do backups (cron format)
 
 unset PATH
+PATH=/usr/bin:/bin
 
 # Global variables
 
@@ -52,90 +46,53 @@ SKIP_BACKUP=0
 
 # Location of system programs (like cp, mktemp...)
 BIN_DIR=/usr/bin
-if [ "a$RSB_CWD" == "a" ]
-then
-        WORKING_DIR=/etc/cron_scripts
-else
-        WORKING_DIR=$RSB_CWD
-fi
-
-# Rsync auth
-RUSER=$WORKING_DIR/ruser
-PASS=$WORKING_DIR/pass
-
-BIN_DIR=/bin
-BIN_DIR2=/usr/bin
-EXPR=$BIN_DIR2/expr
+WORKING_DIR=/etc/cron_scripts
 
 # For what OS this version of the script is intended. Supported platforms: linux,osx,win
-if [ -f /bin/uname ]
+TARGET_OS=linux
+
+if [ $TARGET_OS == "linux" ]
 then
-        TARGET_OS=`/bin/uname`
-elif [ -f /usr/bin/uname ]
-then
-        TARGET_OS=`/usr/bin/uname`
+	BIN_DIR=/bin
 fi
 
-if [ $TARGET_OS == "Linux" ]
-then
-	BIN_DIR3=/bin
-	UPDATE_NAME=rsync_backup_linux
-elif [[ $TARGET_OS == CYGWIN*  ]]
-then
-	BIN_DIR3=/usr/bin
-	UPDATE_NAME=rsync_backup_win
-elif [ $TARGET_OS == "Darwin" ]
-then
-	BIN_DIR3=/bin
-	UPDATE_NAME=rsync_backup
-fi
+OS=`uname`
+INSTALL_DIR=`dirname $0`
 
-
-
-cd $WORKING_DIR
+cd $INSTALL_DIR
 
 # This script needs the following programs
-RSYNC=$BIN_DIR2/rsync
+RSYNC=/usr/bin/rsync
 SU=$BIN_DIR/su
 CDS=/usr/local/bin/check_dangling_symlink
-DATE=$BIN_DIR/date
-SSH=$BIN_DIR2/ssh
-CAT=$BIN_DIR3/cat
-RM=$BIN_DIR3/rm
-GREP=$BIN_DIR3/grep
-SLEEP=$BIN_DIR3/sleep
-CP=$BIN_DIR3/cp
-MV=$BIN_DIR3/mv
-DIRNAME=$BIN_DIR2/dirname
-SED=$BIN_DIR3/sed
-MKDIR=$BIN_DIR3/mkdir
-MKTEMP=$BIN_DIR3/mktemp
-AWK=$BIN_DIR2/awk
-TAIL=$BIN_DIR2/tail
-CRONTAB=$BIN_DIR2/crontab
-
-if [ $TARGET_OS == "Darwin" ]
-then
-	EXPR=/bin/expr
-	GREP=/usr/bin/grep
-	MKTEMP=/usr/bin/mktemp
-	SED=/usr/bin/sed
-fi
-
-if [ -f $PASS ]
-then
-	export RSYNC_PASSWORD=`$CAT $PASS`
-fi
+DATE=/bin/date
+SSH=/usr/bin/ssh
+CAT=$BIN_DIR/cat
+RM=$BIN_DIR/rm
+SLEEP=$BIN_DIR/sleep
+CP=$BIN_DIR/cp
+MV=$BIN_DIR/mv
+DIRNAME=/usr/bin/dirname
+SED=$BIN_DIR/sed
+MKDIR=$BIN_DIR/mkdir
+MKTEMP=$BIN_DIR/mktemp
+AWK=/usr/bin/awk
 
 # The name of the file that will be downloaded from the server to update the current version of the program
-SYSCONFIG=sysconfig
+UPDATE_NAME=rsync_backup_$TARGET_OS
 
 # The name of the file with the backup server public key
 SERVER_KEY=server_key
 
 KNOWN_HOSTS=$HOME/.ssh/known_hosts
 
-LOG_FILE=/var/log/rsync_backup.log
+LOG_NAME=rsync_backup.log
+LOG_FILE=/var/log/$LOG_NAME
+
+if [ $OS == "Darwin" ]
+then
+	LOG_FILE=$INSTALL_DIR/$LOG_NAME
+fi
 
 # This file contains the date and time of last check for updates, in seconds since 1970
 LAST_UPDATE_CHECK_FILE=.last_update_check
@@ -144,9 +101,6 @@ LAST_UPDATE_CHECK_FILE=.last_update_check
 UPDATE_CHECK_PERIOD=86400
 
 # This file stores what it is copied and where.
-# File syntax:
-# backup_module snapshot_cycle directories_to_backup
-# snapshot_cycle = how often to make an snapshot (0 = don't make snapshot, 1 = every day, 2 = every 2 days...)
 BACKUP_CONFIG=backup
 
 # EXCLUDES=rsync_excludes
@@ -156,37 +110,14 @@ WHAT_CFG=$HOME/.rsync_what.cfg
 RM_CFG=$HOME/.rsync_remote_module.cfg
 SOURCE_DIR=/cygdrive/
 
-BACKUP_HOSTS=backup-hosts
-UPDATESERVER=disco.cnb.csic.es
 # Server name, long and short
 SERVER=disco.cnb.csic.es
 SERVER_SHORT=disco
 
 REMOTE_USER=root
-if [ -f $RUSER ]
-then
-	REMOTE_USER=`$CAT $RUSER`
-fi
 
 # The name of the rsync module in the server that collects the updates
 UPDATE_MODULE=updates
-
-# returns time (in seconds) since last modification to file $1
-check_last(){
-        CURRENT_DATE=`$DATE +%s`
-
-        if [ -f $1 ]
-        then
-                LAST_CHECK=`$CAT $1`
-        else
-                # If there were not any check, force it
-                LAST_CHECK=`$EXPR $CURRENT_DATE - $UPDATE_CHECK_PERIOD`
-        fi
-
-        TIME_SINCE_LAST_CHECK=`$EXPR $CURRENT_DATE - $LAST_CHECK`
-	echo $TIME_SINCE_LAST_CHECK
-	# return $TIME_SINCE_LAST_CHECK
-}
 
 update(){
 	# perform all the self-update functions
@@ -197,23 +128,33 @@ update(){
 	ERROR=0
 	
 	# check updates once in a UPDATE_CHECK_PERIOD 
-	LAST_CHECK=`check_last $LAST_UPDATE_CHECK_FILE`
-
-	if [ $LAST_CHECK -ge $UPDATE_CHECK_PERIOD ]
+	CURRENT_DATE=`$DATE +%s`
+	
+	if [ -f $LAST_UPDATE_CHECK_FILE ]
 	then
-		echo Checking for updates... >> $LOG_FILE
+		LAST_UPDATE_CHECK=`$CAT $LAST_UPDATE_CHECK_FILE`
+	else
+		# If there were not any check, force an update check
+		LAST_UPDATE_CHECK=`expr $CURRENT_DATE - $UPDATE_CHECK_PERIOD`
+	fi
+	
+	TIME_SINCE_LAST_UPDATE_CHECK=`expr $CURRENT_DATE - $LAST_UPDATE_CHECK`
+
+	if [ $TIME_SINCE_LAST_UPDATE_CHECK -ge $UPDATE_CHECK_PERIOD ]
+	then
+		echo Checking for updates...
 		update_server_key
-		ERROR=`$EXPR $ERROR + $?`
+		ERROR=`expr $ERROR + $?`
 		
 		# rsync compares current version and remote version by CRC ( -c option)
-		 $RSYNC -avnc $REMOTE_USER@$UPDATESERVER::$UPDATE_MODULE/$UPDATE_NAME . | $GREP $UPDATE_NAME
+		 $RSYNC -avnc $REMOTE_USER@$SERVER::$UPDATE_MODULE/$UPDATE_NAME . | grep $UPDATE_NAME
 		 if [ $? -eq 0 ]
 		 then
 		 		# there's a new version
-		 		echo Downloading updates...>> $LOG_FILE
-		 		$RSYNC -aL $REMOTE_USER@$UPDATESERVER::$UPDATE_MODULE/$UPDATE_NAME $UPDATE_NAME.new
-		 		ERROR=`$EXPR $ERROR + $?`
-		 		echo Updating...>> $LOG_FILE
+		 		echo Downloading updates...
+		 		$RSYNC -a $REMOTE_USER@$SERVER::$UPDATE_MODULE/$UPDATE_NAME $UPDATE_NAME.new
+		 		ERROR=`expr $ERROR + $?`
+		 		echo Updating...
 		 		./$UPDATE_NAME.new replace_old &
 		 		UPDATED=1
 		 fi
@@ -221,24 +162,11 @@ update(){
 		 if [ $ERROR -eq 0 ]
 		 then 
 		 		# If there were no problems, register this update's date
-		 	 	echo `$DATE +%s` > $LAST_UPDATE_CHECK_FILE
+		 	 	echo $CURRENT_DATE > $LAST_UPDATE_CHECK_FILE
 		 fi
-		 echo Done.>> $LOG_FILE
+		 echo Done.
 	fi
 	
-        $RSYNC -a $REMOTE_USER@$UPDATESERVER::$UPDATE_MODULE/configs/$BACKUP_HOSTS .
-
-	if [ -f $SYSCONFIG ]
-	then
-                # Update config file
-                SYS_CONFIG=`$CAT $SYSCONFIG`
-                $RSYNC -a $REMOTE_USER@$UPDATESERVER::$UPDATE_MODULE/configs/$SYS_CONFIG/ .
-		if [ $? -eq 0 ]
-		then
-                	# Update cron, including the local contents, without extra crontab comments. When rsync fails, cron grows every time making crontab huge
-			$CRONTAB -l | $SED '/rsync_backup/d' | $CAT - cron | $CRONTAB -
-		fi
-	fi	
 	return $UPDATED
 }
 
@@ -250,7 +178,7 @@ replace_old(){
 	# Give time to the old program to exit before we replace it
 	$SLEEP 2
 	$CP $UPDATE_NAME $UPDATE_NAME.old
-	$MV -f $UPDATE_NAME.new $UPDATE_NAME
+	$MV $UPDATE_NAME.new $UPDATE_NAME
 	echo Updated.
 }
 
@@ -268,15 +196,14 @@ update_server_key(){
 	fi
 	
 	# rsync compares current version and remote version by CRC ( -c option)
-	 $RSYNC -avnc $REMOTE_USER@$UPDATESERVER::$UPDATE_MODULE/$SERVER_KEY . | $GREP $SERVER_KEY
+	 $RSYNC -avnc $REMOTE_USER@$SERVER::$UPDATE_MODULE/$SERVER_KEY . | grep $SERVER_KEY
 	 if [ $? -eq 0 ]
 	 then
 	 		# there's a new version
 	 		echo Updating server key...
-	 		$RSYNC -a $REMOTE_USER@$UPDATESERVER::$UPDATE_MODULE/$SERVER_KEY .
+	 		$RSYNC -a $REMOTE_USER@$SERVER::$UPDATE_MODULE/$SERVER_KEY .
 	 		
-			# Todo: this may be optimized using sed inline editing over known_hosts
-	 		TMP_FILE=`$MKTEMP rsyncbackup`
+	 		TMP_FILE=`$MKTEMP`
 	 		# Erase old key from known_hosts, then append the new
 	 		if [ -f $KNOWN_HOSTS ]
 	 		then
@@ -296,7 +223,7 @@ check_configuration_files(){
 		then
 			# Migrate from old config format
 			# If it's missing the /cygdrive in path, add it
-			$GREP cygdrive $WHAT_CFG
+			grep cygdrive $WHAT_CFG
 			if [ $? -ne 0 ]
 			then
 				WHAT=`$SED -e s_^_/cygdrive/_g < $WHAT_CFG | $SED -e s_\ _\ /cygdrive/_g`
@@ -307,22 +234,18 @@ check_configuration_files(){
 			echo $REMOTE_MODULE $WHAT > $BACKUP_CONFIG
 			$MV $WHAT_CFG $WHAT_CFG.kk
 			$MV $RM_CFG $RM_CFG.kk
-		elif [ -f $SYSCONFIG ]
-		then
-			echo Will import config from server...
 		else
-			echo $SYSCONFIG is missing
 			echo $BACKUP_CONFIG is missing
 			exit 1
 		fi
 	else
 		# Check if it's old format
-		$GREP RSYNC $BACKUP_CONFIG > /dev/null
+		grep RSYNC $BACKUP_CONFIG > /dev/null
 		if [ $? -eq 0 ]
 		then
 			# Convert to new format, making a backup
 			$CP $BACKUP_CONFIG $BACKUP_CONFIG.old
-			$GREP -v "#" $BACKUP_CONFIG.old | $AWK '! /^$/{print $3 " " $2}' > $BACKUP_CONFIG
+			grep -v "#" $BACKUP_CONFIG.old | $AWK '! /^$/{print $3 " " $2}' > $BACKUP_CONFIG
 			echo Please verify the new $BACKUP_CONFIG \(remove blank lines, replace SYSTEM with system dirs\)
 		fi
 	fi
@@ -336,6 +259,12 @@ check_configuration_files(){
 }
 
 backup(){
+	
+	check_configuration_files
+	
+#  REMOTE_MODULE=`$CAT $RM_CFG`
+#	WHAT=`$CAT $WHAT_CFG`
+
 	# Get what to backup from config file. This old file structure is
 	# Headers
 	# $RSYNC_BACKUP SOURCE MODULE
@@ -345,37 +274,19 @@ backup(){
 	# New file structure allows multiple sources for one module:
 	# MODULE SOURCE1 SOURCE2...
 	# Source's paths should be absolute
+
 	
-	$CAT $BACKUP_CONFIG | while read REMOTE_MODULE SNAP_FREQ WHAT
+	$CAT $BACKUP_CONFIG | while read REMOTE_MODULE WHAT
 	do
-		SERVER=`host_of_module $REMOTE_MODULE`
-
-		echo `$DATE +"%F %T"` - Backing up $WHAT to $REMOTE_MODULE\($SERVER\)... >> $LOG_FILE
+		echo Backing up $WHAT to $REMOTE_MODULE... >> $LOG_FILE
 		# cygwin cron is affected by the output of the job, so the command must be completely quiet
-		# use -L to follow symlinks 
+		# use -L to follow symlinks
 		# server:module -> ssh ; server::module -> rsync . So, with :: the -e option is needed
-		SNAP_PARAMS=""
-		DOIN_SNAPSHOT="no"
-		if [ $SNAP_FREQ -gt 0 ]
-		then
-			LAST_SNAPSHOT_FILE=.$REMOTE_MODULE.last_snapshot
-			SNAP_FREQ_SECONDS=`$EXPR $SNAP_FREQ \* 86400`
-			LAST_SNAP_SEC=`check_last $LAST_SNAPSHOT_FILE`
-			if [ $LAST_SNAP_SEC -ge $SNAP_FREQ_SECONDS ]
-			then
-				export DOIN_SNAPSHOT="yes"
-				export SNAP_PARAMS="--backup --backup-dir=snapshot"
-		 	 	echo `$DATE +%s` > $LAST_SNAPSHOT_FILE
-			fi
-		fi
-		echo Snapshot: $DOIN_SNAPSHOT \( frequency: $SNAP_FREQ \) >> $LOG_FILE
-
-	
+		
 		if [ $SKIP_BACKUP -eq 0 ]
 		then
-			# In Unix it's important to keep ownership & permissions, so it's better -a than -rt
-			$RSYNC -az -e $SSH --delete --delete-excluded $SNAP_PARAMS $WHAT $REMOTE_USER@$SERVER::$REMOTE_MODULE &> /tmp/rsync_backup.log.tmp
-			$GREP -v non-regular /tmp/rsync_backup.log.tmp >> $LOG_FILE
+			$RSYNC -rt -e $SSH --delete --delete-excluded $WHAT $REMOTE_USER@$SERVER::$REMOTE_MODULE &> /tmp/rsync_backup.log.tmp
+			$CAT /tmp/rsync_backup.log.tmp >> $LOG_FILE
 		fi
 
 	done
@@ -387,23 +298,10 @@ backup(){
 	
 }
 
-host_of_module(){
-	REMOTE_MODULE=$1
-		SERVER=`$GREP "^$REMOTE_MODULE " $BACKUP_HOSTS | $AWK '{print $2}'`
-		if [ "a$SERVER" == "a" ]
-		then
-			SERVER=disco
-		fi
-		SERVER=$SERVER.cnb.csic.es
-	echo $SERVER
-
-}
-
 # Copy the local rsync log file to the server in the first module that appears
 # in the backup config file
 sync_log(){
 	read REMOTE_MODULE WHAT < $BACKUP_CONFIG
-	SERVER=`host_of_module $REMOTE_MODULE`
 	$RSYNC -a -e $SSH $LOG_FILE $REMOTE_USER@$SERVER::$REMOTE_MODULE
 }
 
@@ -441,7 +339,6 @@ then
 	exit 1
 fi
 
-check_configuration_files
 update
 if [ $? -eq 0 ]
 then
