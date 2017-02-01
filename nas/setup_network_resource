@@ -2,7 +2,7 @@
 
 [ -z "${sysman_scripts_dir}" ] && readonly sysman_scripts_dir="$(dirname $0)/../.."
 [ -z "${SYSMAN_LOGDIR}" ] && readonly SYSMAN_LOGDIR=/var/log
-readonly log_file=${SYSMAN_LOGDIR}/san.log
+readonly log_file=${SYSMAN_LOGDIR}/nas.log
 readonly log_facility="nas"
 
 . ${sysman_scripts_dir}/misc.sh
@@ -54,7 +54,7 @@ dup=0
 # The space after ${lv} is necessary as to ensure an exact match
 # when there are many volumes that share the beginning, like joe-work and joe-work-extra
 # Also, using readonly alters $? (readonly succeeds -> $? = 0)
-mvol=$( ${nas_scripts_dir}/netrsc/find_mounted_volume.sh "${lv} " )
+mvol=$( ${nas_scripts_dir}/find_mounted_volume "${lv} " )
 if [ $? -ne 0 ]; then
     log "${warning} Resource ${lv} already setup"
     echo ${mvol}
@@ -90,7 +90,7 @@ if [ ${dup} -eq 0 ]; then
     readonly step5="echo \"${lvpath} ${netpath} ${fstype} defaults 0 ${fsckpass} \" >> /etc/fstab"
     eval_and_log "${step5}"
     if [ ${nfshosts} != "-" ]; then
-	readonly step6="${nas_scripts_dir}/netrsc/create_nfs_export.sh ${netpath} ${nfshosts}"
+	readonly step6="${nas_scripts_dir}/add_nfs_export ${netpath} ${nfshosts}"
 	eval_and_log "${step6}"
     fi
 fi

@@ -15,15 +15,15 @@ fi
 
 readonly dir_to_extract=$1
 readonly size=$(du -hs ${dir_to_extract} | awk '{print $1}')
-readonly vg=$(${nas_scripts_dir}/suggest_vg.sh ${size} | head -1)
+readonly vg=$(${nas_scripts_dir}/suggest_vg ${size} | head -1)
 readonly parent_lv_mapper=$(df -P ${dir_to_extract | tail -1 | awk '{print $1}')
-readonly parent_lv=$(${nas_scripts_dir}/mapper_to_lv.sh ${parent_lv_mapper})
+readonly parent_lv=$(${nas_scripts_dir}/mapper_to_lv ${parent_lv_mapper})
 readonly lv_name="$(basename ${parent_lv})-$(basename ${dir_to_extract})"
-echo "${nas_scripts_dir}/setup_network_resource.sh -v ${vg} -l ${lv_name} -s ${size} -p ${dir_to_extract}"
+echo "${nas_scripts_dir}/setup_network_resource -v ${vg} -l ${lv_name} -s ${size} -p ${dir_to_extract}"
 echo "Proceed? \( Ctrl-C to cancel \)"
 read t
 
 mv ${dir_to_extract} ${dir_to_extract}.orig
-${nas_scripts_dir}/setup_network_resource.sh -v ${vg} -l ${lv_name} -s ${size} -p ${dir_to_extract}
+${nas_scripts_dir}/setup_network_resource -v ${vg} -l ${lv_name} -s ${size} -p ${dir_to_extract}
 rsync -av --progress ${dir_to_extract}.orig/ ${dir_to_extract}/
 echo "rm -rf ${dir_to_extract}
