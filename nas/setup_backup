@@ -1,0 +1,92 @@
+#!/bin/bash
+
+# !!!! make backup_conf_server configurable
+BACKUP_CONF_SERVER=
+
+[ -z "${sysman_scripts_dir}" ] && readonly sysman_scripts_dir="$(dirname $0)/../.."
+[ -z "${SYSMAN_LOGDIR}" ] && readonly SYSMAN_LOGDIR=/var/log
+readonly log_file=${SYSMAN_LOGDIR}/san.log
+readonly log_facility="nas"
+
+. ${sysman_scripts_dir}/misc.sh
+
+print_usage(){
+    echo "Setup a backup"
+    echo "Syntax: $0 -f from_host:from_path -t to_backup_server:server_path [-T hour:minute] [-c backup_cfg_name] [-v dst_vg] [-l dst_lv] [-s size]"
+    echo "If -c parameter is missing, the setup of the backup config is omitted"
+    echo "If -v parameter is present, the netrsc in the backup server is created"
+    echo "With -m, data is migrated from -f to -t"
+    exit 1
+}
+
+dst_lv_param=""
+migrate=0
+
+if [ "$#" -gt 0 ]; then
+    while getopts "c:v:l:f:t:s:T:m" options; do
+	case "${options}" in
+            c)
+		readonly cfg_name=${OPTARG}
+		;;
+	    m)
+		migrate=1
+		;;
+	    v)
+		readonly dst_vg=${OPTARG}
+		;;
+	    l)
+		readonly dst_lv=${OPTARG}
+		dst_lv_param="-l ${dst_lv}"
+		;;
+	    f)
+		readonly from=${OPTARG}
+		readonly host=$( expr match "${from}"   "\(.*\):.*" )
+		readonly host_path=$( expr match "${from}"   ".*:\(.*\)" )
+		;;
+	    t)
+		readonly to=${OPTARG}
+		readonly backup_server=$( expr match "${to}"   "\(.*\):.*" )
+		readonly server_path=$( expr match "${to}"   ".*:\(.*\)" )
+		;;
+	    T)
+		readonly backup_time_opt="-T ${OPTARG}"
+		;;
+	    s)
+		readonly size=${OPTARG}
+		;;
+            *)
+		echo "Unknow option" 1>&2 
+		print_usage
+		;;
+	esac
+    done
+    shift $((OPTIND-1))
+fi
+
+if [ -z "${host}" -o -z "${backup_server}" ];then
+    print_usage
+fi
+
+if [ -n "${cfg_name}" ]; then
+    log "${info} ssh ${BACKUP_CONF_SERVER} \"${remote_nas_scripts_dir}/rsync_backup/new_backup -f ${from} -t ${to} ${backup_time_opt} -c ${cfg_name}\""
+    ssh ${BACKUP_CONF_SERVER} "${remote_nas_scripts_dir}/rsync_backup/new_backup -f ${from} -t ${to} ${backup_time_opt} -c ${cfg_name}"
+    log "${info} New backup ${cfg_name} result: $?"
+    ssh ${backup_server} "${remote_nas_scripts_dir}/rsync_backup/conf/update_backup_host_cfg.sh ${backup_server}" | logalize ${log_file}
+    [ $? -ne 0 ] && log "${warning} Problem updating backup config in backup server ${backup_server}"
+fi
+
+if [ -n "${dst_vg}" ]; then
+    log "${info} Creating backup netrsc ${backup_server}:${server_path}"
+    if [ ${migrate} -eq 1 ]; then
+	log "${info} ${remote_nas_scripts_dir}/netrsc/migrate_network_resource.sh -f ${host}:${host_path} -t ${backup_server} -p ${server_path} -v ${dst_vg} -l ${dst_lv_param}"
+	${remote_nas_scripts_dir}/netrsc/migrate_network_resource.sh -f ${host}:${host_path} -t ${backup_server} -p ${server_path} -v ${dst_vg} -l ${dst_lv_param}
+    else
+	log "${info} ssh ${backup_server} \"${remote_nas_scripts_dir}/netrsc/setup_network_resource.sh -v ${dst_vg} ${dst_lv_param} -s ${size} -p ${server_path} \""
+	# !!!! %q escapes the string for bash. Still, this ssh fails due to the last hyphen...
+	ssh ${backup_server} $(printf '%q ' ${remote_nas_scripts_dir}/netrsc/setup_network_resource.sh -v ${dst_vg} ${dst_lv_param} -s ${size} -p ${server_path} )
+    fi
+    [ $? -ne 0 ] && log "${critical} Problem creating ${backup_server}:${server_path}"
+fi
+
+
+
