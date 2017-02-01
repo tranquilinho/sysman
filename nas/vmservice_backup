@@ -1,0 +1,164 @@
+#!/bin/bash
+
+[ -z "${sysman_scripts_dir}" ] && readonly sysman_scripts_dir="$(dirname $0)/../.."
+[ -z "${SYSMAN_LOGDIR}" ] && readonly SYSMAN_LOGDIR=/var/log
+readonly log_file=${SYSMAN_LOGDIR}/vmservice_backup.log
+readonly log_facility="vmsb"
+
+. ${sysman_scripts_dir}/misc.sh
+
+readonly profile_dir=${SYSMAN_ETC}/vmservice_backup
+readonly RSYNC_MAX_TIME=3600
+
+
+readonly roles="backup frontend replicas mirror"
+readonly hostname=$( hostname )
+readonly local=${hostname%%.*}
+if [ $# -eq 1 ]; then
+    profiles="${profile_dir}/$1"
+else
+    profiles=$( grep -l ${local} ${profile_dir}/* )
+fi
+
+log "${info} START"
+
+# !!!! ponder if using a bash file as configuration compensates the
+#      compactness of the custom-DSL of current config files...
+for p in ${profiles}; do
+    # it seems there is no "AND" in (e)grep...
+    line=$( grep ${local} ${p} | grep -v "#" )
+    role=$( expr match "${line}" "\(.*\)=.*" )
+    vg=$( expr match "${line}" ".*=.*:\(.*\):.*:.*" )
+    lv=$( expr match "${line}" ".*=.*:.*:\(.*\):.*" )
+    # check role is valid...
+    # I=`expr match "${roles}" \*"${role}"\*`
+    case ${role} in
+	frontend)
+	    line=$(grep vm= ${p})
+	    service=$(expr match ${line} "vm=\(.*\)")
+	    log "${info} BACKING UP SERVICE ${service}"
+
+	    data_dirs=$(grep "^data=" ${p})
+	    log "${info} Backing-up data..."
+	    line=$(grep backup= ${p})
+	    backup_host=$(expr match ${line} "backup=\(.*\):.*:.*:.*")
+	    backup_path=$(expr match ${line} "backup=.*:.*:.*:\(.*\)")
+	    for d in ${data_dirs}; do
+		dir="$(expr match "${d}" "data=\(.*\)")/"
+		backup_dest="${backup_host}:${dir}"
+		# if ${dir} does not end in /, we should append it...
+		snapshot_dir="/nas/snapshots/${dir#/nas/}$(date +%Y%m%d)"
+		log "${info} Backing up ${dir} to ${backup_dest}"
+		watchdog ${rsync_max_time} rsync -av --delete --backup --exclude-from=${profile_dir}/excludes --backup-dir=${snapshot_dir} ${dir} ${backup_dest} | logalize ${log_file}
+		[ ${PIPESTATUS[0]} -eq 0 ] && touch ${dir}.last_vmsbackup
+	    done
+
+	    vtype=$(expr match "$(grep vtype= ${P})" "vtype=\(.*\)" )
+	    if [ -z "${vtype}" ]; then
+		vtype=esx
+	    fi
+	    log "${info} Backing-up virtual machine..."
+	    backup_dest="${backup_host}:${backup_path}"
+	    [ ${vtype} == "xen" ] && backup_dest=${backup_dest}/${lv}
+	    ${sysman_scripts_dir}/nas/vmbackup -v ${VG} -l ${lv} -t ${backup_dest} -k ${vtype} | logalize ${log_file}
+	    ;;
+	mirror)
+	    line=$(grep vm= ${p))
+	    service=$(expr match ${line} "vm=\(.*\)")
+	    log "${info} MIRRORING SERVICE ${service}"
+
+	    log "${info} Mirroring data..."
+	    line=$(grep frontend= ${p})
+	    source_host=$(expr match ${line} "frontend=\(.*\):.*:.*:.*")
+	    vg=$( expr match "${line}" ".*=.*:\(.*\):.*:" )
+	    lv=$( expr match "${line}" ".*=.*:.*:\(.*\):" )
+
+	    data_dirs=$(grep data= ${p})
+	    for d in ${data_dirs}; do
+		dir="$(expr match "${d}" "data=\(.*\)")/"
+		mirror_source="${source_host}:${dir}"
+		log "${info} Mirroring ${mirror_source} to ${dir}"
+		watchdog ${rsync_max_time} rsync -av --delete ${mirror_source} ${dir} | logalize ${log_file}
+	    done
+
+	    vtype=$(expr match "$(grep vtype= ${P})" "vtype=\(.*\)" )
+	    [ -z "${vtype}" ] && vtype=esx
+	    if [ ${vtype} == xen ]; then
+		line=$(grep mirror= ${p})
+		mirror_host=$(expr match ${line} "mirror=\(.*\):.*:.*:")
+		mirror_vg=$(expr match ${line} "mirror=.*:\(.*\):.*:")
+		mirror_lv=$(expr match ${line} "mirror=.*:.*:\(.*\):")
+
+		mirror_dest=${mirror_host}:/dev/${mirror_vg}/${mirror_lv}
+		log "${info} Mirroring virtual machine..."
+		# !!!! maybe it should use sysman_scripts_dir from source_host...
+		ssh ${source_host} "${sysman_scripts_dir}/nasvmbackup -v ${vg} -l ${lv} -t ${mirror_dest} -k ${vtype} >> ${log}"
+	       log  "${success} Mirror done..."
+	    fi
+	    ;;
+	backup)
+	    line=$(grep vm= ${p})
+	    service=$(expr match ${line} "vm=\(.*\)")
+	    line=$(grep replicas= ${p})
+	    if [ -n "${line}" ]; then
+		days=$(expr match ${line} "replicas=.*:.*:.*:.*:\(.*\)")
+		today=$(date +%u)
+		if [ `expr index "${today}" "${days}"` -eq 0 ]; then
+		    log "${warning} SKIPPING replica of ${service} - ${today} not in ${days}"
+		    continue
+		fi
+
+		log "${info} REPLICATING SERVICE ${service}"
+
+		data_dirs=$(grep data= ${P})
+		log "${info} Replicating data..."
+		replica_host=$(expr match ${line} "replicas=\(.*\):.*:.*:.*:.*")
+		replica_path=$(expr match ${line} "replicas=.*:.*:.*:\(.*\):.*")
+		for d in ${data_dirs}; do
+		    dir="$(expr match "${d}" "data=\(.*\)")/"
+		    replica_dest="${replica_host}:${dir}"
+		    log "${info} Replicating ${dir} to ${replica_dest}"
+		    watchdog ${rsync_max_time} rsync -av --delete ${dir}  ${replica_dest} | logalize ${log_file}
+		done
+		log "${info} Replicating virtual machine..."
+
+		line=$(grep backup= ${p})
+		replica_src=$(expr match ${line} "backup=.*:.*:.*:\(.*\)")
+		replica_dest="${replica_host}:${replica_path}"
+		watchdog ${rsync_max_time} rsync -av --delete ${replica_src}/ ${replica_dest}/ | logalize ${log_file}
+	    fi
+	    ;;
+	replicas)
+	    pppid=$(ps -lp ${ppid} | tail -1 | awk '{print $5}')
+	    ps ${pppid} | grep -i cron > /dev/null
+	    if [ $? -ne 0 ]; then
+		line=${grep vm= ${p})
+		service=$(expr match ${line} "vm=\(.*\)")
+		echo "Setup netrscs in this host for replicas of ${service}"
+		echo "Data dirs"
+		line=$(grep backup= ${P})
+		backup_host=$(expr match ${line} "backup=\(.*\):.*:.*:.*")
+		data_dirs=$(grep data= ${p})
+		line=$(grep replicas= ${p})
+		replica_path=$(expr match ${line} "replicas=.*:.*:.*:\(.*\):.*")
+		for d in ${data_dirs}; do
+		    dir="$(expr match "${d}" "data=\(.*\)")/"
+		    if [ -d ${dir} ]; then
+			echo "${dir} exists"
+		    else
+			# !!!! update syntax...
+			echo "network_resource_migrate -f ${backup_host}:${dir} -t ${local} -v vg"
+		    fi
+		done
+		echo "VM dir"
+		if [ -d ${replica_path} ]; then
+		    echo "${replica_path} exists"
+		else
+		    echo "network_resource_setup -v VG -l vm-replica -s SIZE -p ${REPLICA_PATH} -t xfs"
+		fi
+	    fi
+	    ;;
+    esac
+done
+log "${success} FINISHED"
+exit 0

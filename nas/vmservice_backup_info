@@ -1,0 +1,75 @@
+#!/bin/bash
+
+[ -z "${sysman_scripts_dir}" ] && readonly sysman_scripts_dir="$(dirname $0)/../.."
+. ${sysman_scripts_dir}/misc.sh
+
+
+# more than ANCIENT days without backup is a bad signal...
+readonly ANCIENT=10
+
+
+function print_usage(){
+    echo "Report disk used and last modification time"
+    echo "Syntax: $0 [-v] path"
+    exit 1
+}
+
+readonly ls_options="-ltrA --time-style=+%s"
+
+readonly today=$(date +%s)
+verbose=0
+
+if [ "$#" -gt 0 ]; then
+    while getopts "v" options; do
+	case "${options}" in
+	    v)
+		verbose=1
+		;;
+	esac
+    done
+else
+    print_usage
+fi
+
+declare -a fields
+
+for backup_path in $*; do
+    if [ ! -d ${backup_path} ]; then
+	if [ ${verbose} -eq 1 ]; then 
+	    echo "Path ${backup_path} does not exist"
+	    exit 2
+	else
+	    continue
+	fi
+    fi
+
+    # IFS=' ' read -ra FIELDS <<< "`df -Ph  ${backup_path} | tail -1`"
+    if mountpoint ${backup_path} > /dev/null ; then 
+	fields=($(df -Ph  ${backup_path} | tail -1))
+	# disk_used=${fields[2]}
+	disk_free=${fields[3]}
+    else
+	disk_free="UNM"
+    fi
+
+    if [ ${verbose} -eq 1 ]; then
+	echo "${backup_path}. Space used: ${disk_free}"
+	echo "Newest files: "
+	# Exhaustive search
+	ls ${LS_OPTIONS} -R ${backup_path} | tail -3 
+    else
+	# Search only in the first 3 levels of the directory tree
+	newest_date=$(find ${backup_path} -maxdepth 3 -type d -print0 | xargs -0 ls ${ls_options} | sort -n -k 6 | tail -1 | awk '{print $6}'  )
+	if [ -n "${newest_date}" ]; then
+	    days=$(( ( ${today} - ${newest_date} ) / 3600 / 24 ))
+	else
+	    days=${ANCIENT}
+	fi
+	msg="${backup_path} ${disk_free} $( echo ${newest_date} | gawk '{print strftime("%m-%d",$1)}') ${days}"
+	if [ ${days} -gt ${ANCIENT} ]; then
+	    cecho "${msg} $(hostname) PROBLEM" "${red}"
+	else
+	    echo ${msg}
+	fi
+    fi
+done
