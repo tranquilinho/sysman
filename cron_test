@@ -1,0 +1,5 @@
+#!/bin/bash
+
+echo $PPID `ps -p $PPID` >> /tmp/crontest.log
+PPPID=`ps -lp $PPID | tail -1 | awk '{print $5}'`
+echo $PPPID `ps -p $PPPID` >> /tmp/crontest.log
