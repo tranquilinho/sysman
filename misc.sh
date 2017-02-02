@@ -142,11 +142,23 @@ readonly cyan='\E[36;47m'
 readonly white='\E[37;47m'
 
 
-function cecho(){
+cecho(){
     local message=$1
     local color=${2:-$black} 
     echo -ne "${color}"
     echo -n "${message}"
     #  tput sgr0
     echo -e "\E[0m"
+}
+
+wait_for_docker(){
+	running=1
+	trials=0
+	while [ ${running} -ne 0 -a ${trials} -lt 5 ]; do
+		docker info > /dev/null
+		running=$?
+		trials=$(( trials + 1))
+		logger "Waiting for docker (${trials})..."
+		sleep 5
+	done
 }
