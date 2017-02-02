@@ -1,0 +1,59 @@
+#! /bin/sh
+
+### BEGIN INIT INFO
+# Provides:		vms
+# Required-Start:	virtualbox
+# Required-Stop:	$remote_fs $syslog
+# Default-Start:	2 3 4 5
+# Default-Stop:		
+# Short-Description:	Start virtualbox VMs 
+### END INIT INFO
+
+VBOX_LOGFILE=${VBOX_LOGFILE:-/var/log/vbox_vms.log}
+# !!!! make configurable
+VBOX_INIT_VMS=/etc/sysman/virtualbox/$(hostname -s)
+
+
+start() {
+	# checkpath -f -m 0644 -o root:docker "$VBOX_LOGFILE"
+
+	echo "Starting virtualbox machines"
+	modprobe vboxdrv
+	modprobe vboxnetflt
+	modprobe vboxnetadp
+	for vm in $( ls ${VBOX_INIT_VMS}); do
+	    echo "$(date "+%s") Starting ${vm}" >> ${VBOX_LOGFILE}
+	    VBoxManage startvm $(cat ${VBOX_INIT_VMS}/${vm}) --type headless
+	    echo "$(date "+%s") Started ${vm}" >> ${VBOX_LOGFILE}
+	done
+
+	exit 0
+}
+
+stop() {
+	echo "Stopping virtualbox machines"
+	for vm in $( VBoxManage list runningvms | awk '{name=$1;gsub("\"","",name);print name}' ); do
+	    echo "$(date "+%s") Stopping ${vm}" >> ${VBOX_LOGFILE}
+	    VBoxManage controlvm ${vm} acpipowerbutton
+	    sleep 10
+	    VBoxManage list runningvms | grep $vm
+	    local still_running=$?
+	    if [ ${still_running} -eq 0 ]; then
+	    	VBoxManage controlvm ${vm} poweroff
+	    	echo "$(date "+%s") ${vm} acpi poweroff timeout - hard poweroff" >> ${VBOX_LOGFILE}
+	    fi
+	    echo "$(date "+%s") Stopped ${vm}" >> ${VBOX_LOGFILE}
+	done
+	exit 0
+}
+
+case "$1" in
+    start)
+	start
+	;;
+    stop)
+	stop
+	;;
+esac
+
+exit 0

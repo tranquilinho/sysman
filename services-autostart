@@ -1,0 +1,45 @@
+#! /bin/sh
+
+### BEGIN INIT INFO
+# Provides:		ps
+# Required-Start:	docker sshd
+# Required-Stop:	$remote_fs $syslog
+# Default-Start:	2 3 4 5
+# Default-Stop:		
+# Short-Description:	Start portables services (native)
+### END INIT INFO
+
+# make configurable
+readonly SERVICES_DIR=/etc/sysman/services/$(hostname -s)
+
+start() {
+    echo "Starting portable services"
+
+    # wait_for_docker? @see misc.sh
+
+    for service in $( ls ${SERVICES_DIR}); do
+	${SERVICES_DIR}/${service} start
+    done
+    
+    exit 0
+}
+
+stop() {
+    echo "Stopping portable services"
+    for service in $( ls -r ${SERVICES_DIR}); do
+	${SERVICES_DIR}/${service} stop
+    done
+    
+    exit 0
+}
+
+case "$1" in
+    start)
+	start
+	;;
+    stop)
+	stop
+	;;
+esac
+
+exit 0
