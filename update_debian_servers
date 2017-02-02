@@ -1,0 +1,42 @@
+#!/bin/bash
+
+# @osupdate
+
+[ -z "${sysman_scripts_dir}" ] && readonly sysman_scripts_dir=$(dirname $0)
+[ -z "${SYSMAN_ETC}" ] && readonly SYSMAN_ETC=/etc/sysman
+[ -z "${SYSMAN_LOGDIR}" ] && readonly SYSMAN_LOGDIR=/var/log
+
+. ${sysman_scripts_dir}/misc.sh
+
+
+readonly server_file=${SYSMAN_ETC}/servers.update
+readonly log_file=${SYSMAN_LOGDIR}/server_update.log
+
+print_usage(){
+    echo "Syntax $0 [ -l server_comma_list -y] command"
+    echo "-y -> yes to all"
+    exit 1
+}
+
+
+# !!!! update also containers?
+
+servers="-f ${server_file}"
+if [ "$#" -ge 1 ]; then
+    while getopts "l:y" options; do
+	case "${options}" in
+	    l)
+		servers="-l ${OPTARG}"
+		;;
+	    y)
+		readonly assume_yes=" -y"
+		;;
+	    *)
+		echo Unknown option
+		print_usage
+	esac
+    done
+fi
+
+
+${sysman_scripts_dir}/dsh ${servers} -v -o ${log_file} -c "apt-get update && apt-get ${assume_yes} upgrade"
