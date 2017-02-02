@@ -1,0 +1,30 @@
+
+Run, %Z%\\packages\\Adobe_CS2\\Setup.exe
+
+WinWaitActive,&Siguiente,
+Send,!c
+Send("{TAB 2}")
+Send,12345678912344567
+Send,!s
+Send,!s
+Send,!n
+Send("{DOWN}")
+Send("{TAB}")
+Send("{DOWN}")
+Send("{SPACE}")
+Send("{DOWN}")
+Send("{SPACE}")
+Send("{DOWN}")
+Send("{SPACE}")
+Send("{DOWN}")
+Send("{DOWN}")
+Send("{SPACE}")
+Send,!s
+Send,!n
+
+WinWaitActive,Programa de instalación, Registro
+Send("{SPACE}")
+Send("{DOWN}")
+Send("{DOWN}")
+Send,!s
+Send,!h
