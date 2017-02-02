@@ -1,0 +1,8 @@
+#!/bin/bash
+
+readonly frequency=10
+while [ 1 ]; do
+    average_temp=$(sensors | awk '/Core /{temp+=substr($3,2,2); count++}END{print temp/count}')
+    echo "$(date '+%s %Y%m%d %H%M%S') ${average_temp}" >> /var/log/sensors.log
+    sleep ${frequency}
+done

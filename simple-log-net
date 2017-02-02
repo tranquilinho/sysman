@@ -1,0 +1,26 @@
+#!/bin/bash
+
+readonly frequency=30
+readonly host=$(hostname)
+
+# collect info from all interfaces into single statistics
+while [ 1 ]; do
+    #  face |bytes    packets errs drop fifo frame compressed multicast|bytes    packets errs drop fifo colls carrier compressed
+    #          2        3       4   5                             9      10       11      12   13                        
+    # mawk has problems printing huge numbers, hence we have to use other awk like gawk...
+    # sometimes there is no space after the ":", so it's more reliable to focus only in numbers (hence the cut)
+    network_stats=($(cat /proc/net/dev | grep eth |  cut -d ":" -f 2 | gawk '{rx_bytes+=$1;rx_errors+=$3; rx_drop+=$4; tx_bytes+=$9; tx_errors+=$11; tx_drop+=$12}END{printf "%d %d %d %d %d %d", rx_bytes, rx_errors, rx_drop, tx_bytes, tx_errors, tx_drop}'))
+    if [ -n "${prev_stats[0]}" ]; then
+	# average for bytes, totals for errors/drops
+	rx_bytes=$(( (network_stats[0] - prev_stats[0]) / frequency ))
+	rx_errors=$(( (network_stats[1] - prev_stats[1])  ))
+	rx_drop=$(( (network_stats[2] - prev_stats[2])  ))
+	tx_bytes=$(( (network_stats[3] - prev_stats[3]) / frequency ))
+	tx_errors=$(( (network_stats[4] - prev_stats[4])  ))
+	tx_drop=$(( (network_stats[5] - prev_stats[5])  ))
+	echo "$(date '+%s %Y%m%d %H%M%S') ${host} ${rx_bytes} ${rx_errors} ${rx_drop} ${tx_bytes} ${tx_errors} ${tx_drop}" >> /var/log/network_stats.log
+    fi
+    
+    sleep ${frequency}
+    prev_stats=("${network_stats[@]}")
+done
