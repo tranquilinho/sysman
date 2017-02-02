@@ -1,0 +1,50 @@
+#!/bin/bash
+# Original from http://www.jdmz.net/ssh/
+# Customized by Jesus Cuenca
+# Allows to restrict the commands executed using ssh + keys, and logs all the trials
+PATH=/usr/bin:/bin:/sbin:/usr/sbin
+LOG_FILE=/var/log/validate-ssh-command.log
+FROM=$(echo ${SSH_CLIENT} | awk '{print $1}')
+
+echo "${FROM} start $(date '+%s %Y-%m-%d %H:%M:%S')" >> ${LOG_FILE}
+case "${SSH_ORIGINAL_COMMAND}" in
+        *\&*)
+                echo "${FROM} Rejected: ${SSH_ORIGINAL_COMMAND}"  >> ${LOG_FILE}
+                ;;
+        *\(*)
+                echo "${FROM} Rejected: ${SSH_ORIGINAL_COMMAND}"  >> ${LOG_FILE}
+                ;;
+        *\{*)
+                echo "${FROM} Rejected: ${SSH_ORIGINAL_COMMAND}"  >> ${LOG_FILE}
+                ;;
+        *\;*)
+                echo "${FROM} Rejected: ${SSH_ORIGINAL_COMMAND}"  >> ${LOG_FILE}
+                ;;
+        *\<*)
+                echo "${FROM} Rejected: ${SSH_ORIGINAL_COMMAND}"  >> ${LOG_FILE}
+                ;;
+        *\`*)
+                echo "${FROM} Rejected: ${SSH_ORIGINAL_COMMAND}"  >> ${LOG_FILE}
+                ;;
+        *rsync\ --server*)
+		echo "${FROM} ${SSH_ORIGINAL_COMMAND}" >> ${LOG_FILE}
+		${SSH_ORIGINAL_COMMAND}
+                ;;
+	/etc/sysman/san/*)
+		echo "${FROM} ${SSH_ORIGINAL_COMMAND}" >> ${LOG_FILE}
+		${SSH_ORIGINAL_COMMAND}
+		;;
+	ln*)
+		echo "${FROM} ${SSH_ORIGINAL_COMMAND}" >> ${LOG_FILE}
+		${SSH_ORIGINAL_COMMAND}
+		;;
+	lvcreate*)
+		echo "${FROM} ${SSH_ORIGINAL_COMMAND}" >> ${LOG_FILE}
+		${SSH_ORIGINAL_COMMAND}
+		;;
+        *)
+                echo "${FROM} Rejected: ${SSH_ORIGINAL_COMMAND}"  >> ${LOG_FILE}
+                ;;
+esac
+echo "${FROM} finish $(date '+%s %Y-%m-%d %H:%M:%S')" >> ${LOG_FILE}
+echo >> ${LOG_FILE}
