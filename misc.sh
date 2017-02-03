@@ -11,8 +11,8 @@
 
 readonly nas_scripts_dir=${sysman_scripts_dir}/nas
 readonly remote_nas_scripts_dir=/etc/sysman/nas
-readonly user_db=${sysman_scripts_dir}/users
-readonly group_db=${sysman_scripts_dir}/groups
+readonly user_db=${SYSMAN_ETC}/users
+readonly group_db=${SYSMAN_ETC}/groups
 
 error(){
     echo "$1"
@@ -31,7 +31,7 @@ add_new_user(){
     local result=0
     local homes_dir=${home_base:-/home}
     log "${info} Creating user account ${user}@${server} (${uid},${gid}) (${expire})"
-    ssh ${server} "grep ^${user}: /etc/passwd || useradd -u ${uid} -g ${gid} -s ${shell} ${create_home} -e ${expire} -d ${homes_dir}/${user} ${user}"
+    ssh  ${SSH_USER}${server} "grep ^${user}: /etc/passwd || useradd -u ${uid} -g ${gid} -s ${shell} ${create_home} -e ${expire} -d ${homes_dir}/${user} ${user}"
     result=$?
     if [ ${result} -eq 0 ]; then
 	log "${success} Account ${user}@${server} available"
@@ -45,7 +45,7 @@ add_new_user(){
 add_new_group(){
     log_facility="accounting"
     local server=$1
-    ssh ${server} "grep ${group} /etc/group || groupadd -g ${gid} ${group}"
+    ssh  ${SSH_USER}${server} "grep ${group} /etc/group || groupadd -g ${gid} ${group}"
     return $?
 }
 
@@ -55,7 +55,7 @@ set_quota(){
     local server=$1
     local result=0
     local cmd="setquota ${user} ${quota} ${quota} 0 0 /home"
-    ssh ${server} "${cmd}"
+    ssh  ${SSH_USER}${server} "${cmd}"
     result=$?
     if [ ${result} -eq 0 ]; then
 	log "${success} Quota for ${user} set to ${quota}"
@@ -69,7 +69,7 @@ set_quota(){
 set_passwd(){
     readonly passwd=$(random_str)
     local result=0
-    ssh ${host} "echo ${user}:${passwd} | chpasswd"
+    ssh  ${SSH_USER}${host} "echo ${user}:${passwd} | chpasswd"
     result=$?
     if [ ${result} -eq 0 ]; then
 	log "${success} Password set for ${user}"

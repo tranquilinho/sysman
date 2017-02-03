@@ -15,6 +15,8 @@ log_facility="accounting"
 # 64MB
 readonly default_quota=64000
 
+[ -n "${SM_USER}" ] && readonly SSH_USER="${SM_USER}@"
+
 print_usage(){
     echo "Create a user account in a remote server"
     echo "Syntax: $0 -H remote_host -u username [-d home_base_dir -g groupname -U uid -G gid -q quota_in_GB -e expiration_days]"

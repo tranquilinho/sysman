@@ -12,7 +12,7 @@ log_facility="accounting"
 
 . ${sysman_scripts_dir}/misc.sh
 
-
+[ -n "${SM_USER}" ] && readonly SSH_USER="${SM_USER}@"
 
 print_usage(){
     echo "Clone a user account from a server to another"
@@ -50,9 +50,9 @@ fi
 
 [ -z "${new_user}" ] && new_user=${user}
 
-ssh ${from_host} "grep ${user}: /etc/passwd" | sed "s/${user}/${new_user}/g" | ssh ${to_host} "cat >> /etc/passwd"
-ssh ${from_host} "grep ${user}: /etc/shadow" | sed "s/${user}/${new_user}/g" | ssh ${to_host} "cat >> /etc/shadow"
-ssh ${to_host} "mkdir -p /home/${new_user}/.ssh ; chown -R ${new_user} /home/${new_user}"
-ssh ${from_host} "cat ~${user}/.ssh/authorized_keys" | ssh ${to_host} "cat >> /home/${new_user}/.ssh/authorized_keys"
+ssh ${SSH_USER}${from_host} "grep ${user}: /etc/passwd" | sed "s/${user}/${new_user}/g" | ssh  ${SSH_USER}${to_host} "cat >> /etc/passwd"
+ssh ${SSH_USER}${from_host} "grep ${user}: /etc/shadow" | sed "s/${user}/${new_user}/g" | ssh  ${SSH_USER}${to_host} "cat >> /etc/shadow"
+ssh ${SSH_USER}${to_host} "mkdir -p /home/${new_user}/.ssh ; chown -R ${new_user} /home/${new_user}"
+ssh ${SSH_USER}${from_host} "cat ~${user}/.ssh/authorized_keys" | ssh  ${SSH_USER}${to_host} "cat >> /home/${new_user}/.ssh/authorized_keys"
 
 log "${success} User account ${user}@${from_host} cloned as ${new_user}@${to_host}"
