@@ -7,15 +7,15 @@ then
 fi
 BACKUP_HOST=$1
 
-CONF_DIR=/etc/sysman/san/rsync_backup/conf
+CONF_DIR=/etc/sysman/backup
 RSYNC_CONFS_DIR=$CONF_DIR/rsyncd.confs
-RSYNC_CONF=$CONF_DIR/`hostname`
+RSYNC_CONF=$CONF_DIR/$(hostname)
 AUTHORIZED_KEYS=/root/.ssh/authorized_keys
 VALID_KEYS=$CONF_DIR/valid_keys
 SM_KEY=$VALID_KEYS/deployer
 
 cd ${CONF_DIR}
-bzr update
+git pull
 
 declare -A client_key_handled
 
@@ -63,5 +63,6 @@ for f in $(grep -l "backup_host=$BACKUP_HOST" $RSYNC_CONFS_DIR/*); do
 	fi
 done
 
-bzr commit -m "backup conf"
+git commit -a -m "Auto - backup_update_host_cfg"
+git push
 /etc/init.d/rsync restart
