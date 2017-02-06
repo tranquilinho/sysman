@@ -19,6 +19,8 @@ print_usage(){
     exit ${syntax_error}  
 }
 
+
+remote_user=root
 fstype="ext4"
 nfshosts="-"
 
@@ -58,9 +60,9 @@ if [ -n "${nas_host}" ]; then
     # if [[ ${remote_params} =~ ${regex} ]]; then
     # echo "${BASH_REMATCH[1]} ${BASH_REMATCH[2]}"
     # fi
-    readonly remote_params$(echo "$@" | sed 's_-H [^ ]*__g')
+    readonly remote_params=$(echo "$@" | sed 's_-H [^ ]*__g')
     # obviouslly, this command must be in the $PATH of the nas_host (bash.bashrc)
-    ssh ${nas_host} "$0 ${remote_params}"
+    ssh ${remote_user}@${nas_host} "network_resource_setup ${remote_params}"
     exit $?
 fi
 
