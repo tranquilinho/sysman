@@ -29,7 +29,7 @@ FEATURES
 
 TODO
 
-	- split updates of code (rsync_backup script) and config (configs symlink)
+	- split updates of code (rsync_backup script) and config (configs, update_servers)
 
 INSTALLATION INSTRUCTIONS
 
