@@ -1,6 +1,5 @@
 rsync_backup script documentation
 
-
 INTRODUCTION
 
 This software perform backups from heterogeneous clients to a central server,
@@ -27,6 +26,10 @@ FEATURES
 	on their data
 	- automatic software updates
 	- multiplatform (windows / linux / mac os x)
+
+TODO
+
+	- split updates of code (rsync_backup script) and config (configs symlink)
 
 INSTALLATION INSTRUCTIONS
 
