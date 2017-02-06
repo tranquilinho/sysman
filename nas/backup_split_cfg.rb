@@ -2,11 +2,12 @@
 
 require 'pp'
 
-BASE_PATH='/etc/sysman/san/'
-BACKUP_TIME_FILE=BASE_PATH + 'rsync_backup/conf/backup_time'
-BACKUP_HOSTS_PATH=BASE_PATH + 'rsync_backup/updates/configs/backup-hosts'
+BASE_PATH='/etc/sysman/backup/'
+BACKUP_TIME_FILE=BASE_PATH + 'backup_time'
+BACKUP_HOSTS_PATH=BASE_PATH + 'clients/backup-hosts'
+
 def make_sysconfig_path(file_name)
-	lambda{|sysconfig| BASE_PATH + "rsync_backup/updates/configs/#{sysconfig}/#{file_name}"}
+  lambda{|sysconfig| BASE_PATH + "clients/#{sysconfig}/#{file_name}"}
 end
 SYSCONFIG_PATH=make_sysconfig_path("")
 SYSCONFIG_BACKUP_PATH=make_sysconfig_path("backup")
