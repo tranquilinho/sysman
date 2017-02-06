@@ -1,6 +1,6 @@
 #!/bin/bash
 
-[ -z "${sysman_scripts_dir}" ] && readonly sysman_scripts_dir="$(dirname $0)/../.."
+[ -z "${sysman_scripts_dir}" ] && readonly sysman_scripts_dir="$(dirname $0)/.."
 [ -z "${SYSMAN_LOGDIR}" ] && readonly SYSMAN_LOGDIR=/var/log
 readonly log_file=${SYSMAN_LOGDIR}/nas.log
 readonly log_facility="nas"
@@ -13,9 +13,9 @@ readonly syntax_error=1
 
 print_usage(){
     echo "Syntax:"
-    echo "   $0 -v dst_vg -l dst_lv -s size -p path [-f nfs_clients] [-t fstype]"
+    echo "   $0 -v dst_vg -l dst_lv -s size -p path [-f nfs_clients] [-t fstype] [-H nas_host]"
     echo "Example:"
-    echo "   $0 -v vg3 -l joe-backup -s 30G -p /nas/backup/joe -f host1,host2 -t xfs"
+    echo "   $0 -v vg3 -l joe-backup -s 30G -p /nas/backup/joe -f host1,host2 -t xfs -H nas14"
     exit ${syntax_error}  
 }
 
@@ -23,7 +23,7 @@ fstype="ext4"
 nfshosts="-"
 
 if [ "$#" -ge 8 ]; then
-    while getopts "v:l:s:p:f:t:" options; do
+    while getopts "v:l:s:p:f:t:H:" options; do
 	case "${options}" in
             v)
 		readonly vg=${OPTARG}
@@ -43,10 +43,25 @@ if [ "$#" -ge 8 ]; then
 	    t)
 		fstype=${OPTARG}
 		;;
+	    H)
+		readonly nas_host=${OPTARG}
+		;;
 	esac
     done
 else
     print_usage
+fi
+
+if [ -n "${nas_host}" ]; then
+    # trying to match all cases seems more complex that just removing the substring
+    # readonly regex='(.*) -H [^ ]* (.*)'
+    # if [[ ${remote_params} =~ ${regex} ]]; then
+    # echo "${BASH_REMATCH[1]} ${BASH_REMATCH[2]}"
+    # fi
+    readonly remote_params$(echo "$@" | sed 's_-H [^ ]*__g')
+    # obviouslly, this command must be in the $PATH of the nas_host (bash.bashrc)
+    ssh ${nas_host} "$0 ${remote_params}"
+    exit $?
 fi
 
 dup=0
