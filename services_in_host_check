@@ -35,8 +35,8 @@ extra(){
 prefered_here=$(parse_prefered)
 running_xen=$(${sysman_dir}/xen/list-domus | awk '{print $1 " XEN"}')
 running_dkr=$(${sysman_dir}/docker/list-containers | awk '{print substr($1,2) " DKR"}')
-running_svc=$(${sysman_dir}/services/local-services | awk '{print $1 " SVC"}')
-running_vbx=$(${sysman_dir}/virtualbox/list-vms | awk '{print $1 " VBX"}')
+running_svc=$(${sysman_dir}/services_in_localhost | awk '{print $1 " SVC"}')
+running_vbx=$(${sysman_dir}/vm_list | awk '{print $1 " VBX"}')
 
 readonly missing_xen=$(missing XEN "${prefered_here}" "${running_xen}")
 readonly extra_xen=$(extra XEN "${prefered_here}" "${running_xen}")
