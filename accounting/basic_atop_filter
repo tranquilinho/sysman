@@ -1,0 +1,13 @@
+#!/bin/bash
+# Example of how to easily parse atop logs with awk
+# You can adapt this to generate plots based on atop logs
+
+# First collect the output of atop for each relevant file. For example:
+#   for f in $(ls /var/log/atop/atop_2015*); do atop -r $f >> atop_collection; done
+# Then pass that file (atop_collection) as stdin to this script
+grep -v "^NET" - | awk 'BEGIN{summary=""; i=0}
+     	       	       /^ATOP/ {timestamp=$4 "-" $5; print timestamp " SYS " sys " USR " user " IRQ " irq " IDLE " idle " FREE " freemem " CACHE " cache; j=0; for (p in processes){print processes[j++]}; i=0; delete processes; next}
+		       /^CPU/ {sys=$4; user=$7; irq= $10; idle=$13; next}
+		       /^MEM/ {freemem=$7; cache=$10; next}
+		       $1 ~ /[0-9]+/ {cpu=$11; sub(/%/,"",cpu); if(cpu+0 > 20){processes[i]=$0; i++}; next}
+ 		       '

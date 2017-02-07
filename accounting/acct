@@ -1,0 +1,8 @@
+#!/bin/bash
+# Basic user accounting @act
+
+echo SUMMARY \(time in hours\)
+ac -p | sort -nr -k 2
+echo 
+echo DAY BY DAY
+ac -dp

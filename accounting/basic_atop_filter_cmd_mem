@@ -1,0 +1,49 @@
+#!/bin/bash
+# Example of how to easily parse atop logs with awk
+# You can adapt this to generate plots based on atop logs
+
+# First collect the output of atop for each relevant file. For example:
+#   for f in $(ls /var/log/atop/atop_2015*); do atop -r $f >> atop_collection; done
+# Then pass that file (atop_collection) as stdin to this script
+egrep -vi "^cpu|^mem|^atop|^prc|^swp|^pag|^net|^cpl|^  pid" - | grep -v 'since boot'  | awk 'BEGIN{summary=""; i=0}
+{
+  # with -m VSS is $5 and RSS $6; with -p, $4 and $5
+  # with -m, cmd=$10 ; with -p, $11
+  vsize_raw=$4; rsize_raw=$5; cmd=$11;
+ 
+ vs_unit=substr(vsize_raw,length(vsize_raw),1);
+ vsize=substr(vsize_raw,1,length(vsize_raw)-1);
+
+ if(vs_unit == "M"){ vsize_scaled=vsize; }
+ else if(vs_unit == "G") {vsize_scaled=vsize * 1024;}
+ else {vsize_scaled=0};
+
+ if(vsize_scaled > 300){
+    # print vsize " " vs_unit " " vsize_scaled " " cmd;
+    if(vsizes[cmd] < vsize_scaled) vsizes[cmd] = vsize_scaled;
+ }
+
+ rs_unit=substr(rsize_raw,length(rsize_raw),1);
+ rsize=substr(rsize_raw,1,length(rsize_raw)-1);
+
+ if(rs_unit == "M"){ rsize_scaled=rsize * 1.0; }
+ else if(rs_unit == "G") {rsize_scaled=rsize * 1024.0;}
+ else {rsize_scaled=0};
+
+ # print rsize " " rs_unit " " rsize_scaled " " cmd;
+
+ if(rsize_scaled > 300){
+    rsum[cmd]+=rsize_scaled;
+    rcount[cmd]++;
+    if(rsizes[cmd] < rsize_scaled){
+	 rsizes[cmd] = rsize_scaled;
+    }
+ }
+
+}END{
+  for (k in vsizes){
+      ravg=rsum[k]/rcount[k];
+      print k " " vsizes[k] " " ravg "/" rsizes[k];
+  }
+}
+ 		       '
