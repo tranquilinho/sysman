@@ -1,11 +1,12 @@
 #!/bin/bash
 
 [ -z "${sysman_scripts_dir}" ] && readonly sysman_scripts_dir=$(dirname $0)
+[ -z "${SYSMAN_ETC}" ] && readonly SYSMAN_ETC=/etc/sysman
 
 readonly host=$(hostname -s)
 
 parse_prefered(){
-    grep ${host} ${sysman_dir}/services/prefered-service-location | while read prefered_host type name; do
+    grep ${host} ${SYSMAN_ETC}/services/prefered-service-location | while read prefered_host type name; do
 	case ${type} in
 	    XEN|DKR|SVC|VBX)
 		echo "${name} ${type}"
@@ -33,6 +34,7 @@ extra(){
 }
 
 prefered_here=$(parse_prefered)
+
 running_xen=$(${sysman_dir}/xen_list_domus | awk '{print $1 " XEN"}')
 running_dkr=$(${sysman_dir}/docker/list_containers | awk '{print substr($1,2) " DKR"}')
 running_svc=$(${sysman_dir}/services_in_localhost | awk '{print $1 " SVC"}')
