@@ -1,0 +1,63 @@
+#!/bin/bash
+
+[ -z "${sysman_scripts_dir}" ] && readonly sysman_scripts_dir=$(dirname $0)
+
+readonly host=$(hostname -s)
+
+parse_prefered(){
+    grep ${host} ${sysman_dir}/services/prefered-service-location | while read prefered_host type name; do
+	case ${type} in
+	    XEN|DKR|SVC|VBX)
+		echo "${name} ${type}"
+		;;
+	esac
+    done
+}
+
+set_difference(){
+    comm -23 <(echo -e "$1" | sort) <(echo -e "$2" | sort)
+}
+
+missing(){
+    local type=$1
+    local prefered=$2
+    local running=$3
+    set_difference "$(echo -e "${prefered}" | grep ${type})" "$(echo -e "${running}" | grep ${type})"
+}
+
+extra(){
+    local type=$1
+    local prefered=$2
+    local running=$3
+    set_difference "$(echo -e "${running}" | grep ${type})" "$(echo "${prefered}" | grep ${type})" 
+}
+
+prefered_here=$(parse_prefered)
+running_xen=$(${sysman_dir}/xen/list-domus | awk '{print $1 " XEN"}')
+running_dkr=$(${sysman_dir}/docker/list-containers | awk '{print substr($1,2) " DKR"}')
+running_svc=$(${sysman_dir}/services/local-services | awk '{print $1 " SVC"}')
+running_vbx=$(${sysman_dir}/virtualbox/list-vms | awk '{print $1 " VBX"}')
+
+readonly missing_xen=$(missing XEN "${prefered_here}" "${running_xen}")
+readonly extra_xen=$(extra XEN "${prefered_here}" "${running_xen}")
+readonly missing_dkr=$(missing DKR "${prefered_here}" "${running_dkr}")
+readonly extra_dkr=$(extra DKR "${prefered_here}" "${running_dkr}")
+readonly missing_svc=$(missing SVC "${prefered_here}" "${running_svc}")
+readonly extra_svc=$(extra SVC "${prefered_here}" "${running_svc}")
+readonly missing_vbx=$(missing VBX "${prefered_here}" "${running_vbx}")
+readonly extra_vbx=$(extra VBX "${prefered_here}" "${running_vbx}")
+
+code=0
+echo "Running ${running_vbx} ${running_xen} ${running_dkr} ${running_svc}" | tr "\n" " "
+
+if [ -n "${missing_xen}" -o -n "${missing_vbx}" -o -n "${missing_dkr}" -o -n "${missing_svc}" ]; then
+    echo "Missing ${missing_xen} ${missing_vbx} ${missing_dkr} ${missing_svc}"| tr "\n" " "
+    code=2
+fi
+
+if [ -n "${extra_xen}" -o -n "${extra_vbx}" -o -n "${extra_dkr}" -o -n "${extra_svc}" ]; then
+    echo "Extra ${extra_xen} ${extra_vbx} ${extra_dkr} ${extra_svc}"| tr "\n" " "
+    code=2
+fi
+
+exit ${code}
