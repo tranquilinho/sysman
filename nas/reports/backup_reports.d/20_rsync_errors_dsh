@@ -1,0 +1,23 @@
+#!/bin/bash
+# TODO: report only modules with errors (check grep returns at least 1 line)
+
+. /etc/san/reports/backup_reports.common
+
+header "Errors"
+
+echo "<table>"
+
+echo "<tr><td>Module</td><td>Date</td><td>Errors</td></tr>"
+
+find /nas/backup -maxdepth 3 -name rsync_backup.log -mtime -90 | sort | while read f
+do
+	IFS='/' read -ra PATH_ELEMENTS <<< "$f"
+	USER=${PATH_ELEMENTS[2]}
+	COMPUTER=${PATH_ELEMENTS[3]}
+	ERROR_DATE=`stat -c %y $f | cut -c 1-10`
+	echo "<tr><td>$USER $COMPUTER</td><td>$ERROR_DATE</td><td>&nbsp;<pre>"
+	tail -100 $f | grep failed | tail 
+	echo "</pre></td></tr>"
+done
+
+echo "</table>"

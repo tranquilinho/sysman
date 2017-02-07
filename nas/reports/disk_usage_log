@@ -1,0 +1,18 @@
+#!/bin/bash
+
+readonly scripts_cfg=${0%/sysman/san*}/etc/service.cfg
+
+. ${scripts_cfg} 
+
+readonly log_file=${storage_log}
+
+readonly nas_dir=${service_root}/sysman/san
+
+. ${scripts_base}/common
+
+
+# vgs
+# /etc/san/reports/disk_usage.sh 
+
+readonly log_facility="storage-VG"
+${nas_dir}/nas_dsh -v -c vgs | egrep -v "VFree|vgs" | column -t | logalize ${log_file}

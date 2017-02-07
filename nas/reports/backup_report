@@ -1,0 +1,27 @@
+#!/bin/bash
+
+# Update the backup database (using update_backup_db) and send a report of the backups
+#
+
+. /etc/san/reports/backup_reports.common
+
+cd $WD
+biocs_query_simple backup "DELETE FROM active_modules"
+
+/etc/sysman/san/nas_dsh -f /etc/sysman/san/backup_ip -v -c $WD/update_backup_db
+# echo > $BACKUP_REPORT
+for SCRIPT in `ls backup_reports.d/[0-9][0-9]*`
+do
+	if [[ "$SCRIPT" == *dsh ]]
+	then
+		/etc/san/dsh /etc/san/backup_ip /etc/san/reports/$SCRIPT # >> $BACKUP_REPORT
+	else
+		$SCRIPT # >> $BACKUP_REPORT
+	fi
+done
+
+
+# echo . | mutt -s "Backup report `date +%d/%m/%Y`" -a $BACKUP_REPORT -- $ADMIN_EMAIL 
+
+# rm $BACKUP_REPORT
+exit 0

@@ -1,0 +1,24 @@
+#!/bin/bash
+
+BACKUP_REPORT="/tmp/backup_report_`date +%Y%m%d`.html"
+DEBUG=0
+
+BDIR=/etc/san/reports/
+
+. $BDIR/biocs_mysql_query.sh
+. $BDIR/reports.common
+
+ONLY_PRINT=0
+
+
+report(){
+	echo $* >> $BACKUP_REPORT
+}
+
+start_report(){
+	echo $* > $BACKUP_REPORT
+}
+header(){
+	echo "<h2>$1</h2>"
+
+}

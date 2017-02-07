@@ -1,0 +1,5 @@
+#!/bin/bash
+
+. ./backup_reports.common
+
+echo "</body></html>" 

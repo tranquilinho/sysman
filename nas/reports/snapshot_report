@@ -1,0 +1,15 @@
+#!/bin/bash
+
+# REPORT="/tmp/snapshot_report_`date +%Y%m%d`.html"
+ruby /etc/san/reports/snapshots_report.rb # > $REPORT
+echo "<pre>"
+tail -30 /var/log/snapshot.log # >> $REPORT
+
+echo "</pre>"
+
+# mutt -s "`hostname` Snapshot report `date +%d/%m/%Y`" -a $REPORT -- jcuenca@cnb.csic.es <<EOF
+# .
+# EOF
+
+# rm $REPORT
+exit 0

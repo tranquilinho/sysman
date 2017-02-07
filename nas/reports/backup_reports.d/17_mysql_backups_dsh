@@ -1,0 +1,15 @@
+#!/bin/bash
+
+. /etc/san/reports/backup_reports.common
+
+BACKUP_DB=backup
+
+header "MySQL backups"
+
+MYSQLDIRS=`mount | grep mysql | cut -d " " -f 3`
+for d in $MYSQLDIRS
+do
+	echo "$d <br>"
+	echo "=================================<br>"
+	find $d -type f -mtime -7 -printf "%T@ %p %s\n" | sort -n | tail | cut -d " " -f 2-3 | sed 's_$_<br>_g'
+done

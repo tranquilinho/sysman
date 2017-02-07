@@ -1,0 +1,13 @@
+BEGIN{
+RS="["
+FS="\n"
+}
+{
+module=substr($1,1,length($1)-1)
+if(module == DESIRED_MODULE)
+	for(i=1;i<NF;i++)
+		if(index($i,"path") != 0){
+			print substr($i,index($i,"/"),length($i)-1)
+			break
+		}
+}

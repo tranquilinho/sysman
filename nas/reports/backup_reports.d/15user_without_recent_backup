@@ -1,0 +1,16 @@
+#!/bin/bash
+
+. /etc/san/reports/backup_reports.common
+
+BACKUP_DB=backup
+
+header "Users without recent (last week) backup"
+
+#echo "<table>"
+
+# Run the query and prettify it adding a header and beautiful formatting with column
+#echo "<tr><td>Module</td><td>Backup date</td><td>Computer last seen</td></tr>"
+
+biocs_query $BACKUP_DB "select login from backup.active_modules right join inventory.users on user = users.login where active=1 and backup=1 and user is null order by login" 
+
+#echo "</table>"

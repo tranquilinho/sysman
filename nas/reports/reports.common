@@ -1,0 +1,4 @@
+#!/bin/bash
+
+ADMIN_EMAIL="jcuenca@cnb.csic.es"
+WD=/etc/san/reports

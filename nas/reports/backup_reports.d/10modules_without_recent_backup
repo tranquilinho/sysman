@@ -1,0 +1,20 @@
+#!/bin/bash
+
+. /etc/san/reports/backup_reports.common
+
+BACKUP_DB=backup
+
+header "Modules without recent (last week) backup"
+
+#echo "<table>"
+
+# Run the query and prettify it adding a header and beautiful formatting with column
+#echo "<tr><td>Module</td><td>Backup date</td><td>Computer last seen</td></tr>"
+
+biocs_query $BACKUP_DB "select backup.module, max(backup.date) as last,computers.last_seen from backup JOIN active_modules JOIN computers on backup.module=active_modules.module AND active_modules.computer=computers.name group by backup.module having datediff(now(),last) > 7 ORDER BY last ASC" 
+
+biocs_query $BACKUP_DB "select module from active_modules where module not in (select module from backup) order by module"
+
+biocs_query $BACKUP_DB "select name from computers where name not in (select computer from active_modules order by name)" 
+
+#echo "</table>"

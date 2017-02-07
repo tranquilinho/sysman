@@ -1,0 +1,11 @@
+#!/bin/bash
+
+. ./backup_reports.common
+
+TITLE="Backup report `date +%d/%m/%Y`"
+# echo "MIME-Version: 1.0"
+# echo "Content-Type: text/html"
+# echo "Content-Disposition: inline"
+echo "<html><head><title>$TITLE</title></head>"
+echo "<body><h1>$TITLE</h1>" 
+

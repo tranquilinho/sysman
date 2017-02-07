@@ -1,0 +1,28 @@
+#!/bin/bash
+# With no argument, show the date of last backup for all users
+# With 1 argument, show last backups of a user
+DB=backup
+BDIR=/etc/san/reports/
+
+. $BDIR/biocs_mysql_query.sh
+
+MODULE=""
+HTML="--html"
+if [ $# -ge 1 ]
+then
+	if [ $1 == "--nohtml" ]
+	then
+		HTML=""
+		shift
+	fi
+	MODULE=$1
+fi
+
+if [ ${#MODULE} -gt 0 ]
+then
+	biocs_query_simple $DB "select * from backup where module = '$MODULE' and datediff(now(),date) < 7 order by date" $HTML
+# | column -s "|" -t
+else
+	biocs_query_simple $DB "select backup.module,max(date) as last from backup JOIN active_modules on backup.module=active_modules.module group by backup.module ORDER BY backup.module ASC" $HTML
+fi
+exit $?

@@ -1,0 +1,14 @@
+#!/bin/bash
+
+. /etc/san/reports/backup_reports.common
+
+BACKUP_DB=backup
+
+
+header "Top transfer"
+
+#echo "<table><tr><td>Module</td><td>Total transfer size (MB)</td><td>Total backup size (MB)</td></tr>"
+
+biocs_query $BACKUP_DB "select module, round(sum(size)/(1024*1024)) as transfer_size,round(max(total)/(1024*1024)) as total_size from backup where datediff(now() ,date) < 7  GROUP BY module ORDER BY transfer_size DESC LIMIT 10" 
+
+#echo "</table>"

@@ -1,0 +1,33 @@
+#!/bin/bash
+
+. /etc/san/reports/backup_reports.common
+
+BACKUP_DB=backup
+
+header "Latest backups"
+
+echo "<TABLE BORDER=1><TR><TH>module</TH><TH>last</TH><TH>total_size</TH><TH>time_to_complete</TH></TR>"
+MODULES=`mktemp`
+
+biocs_query_simple $BACKUP_DB  "select backup.module from backup JOIN active_modules on backup.module = active_modules.module group by backup.module" > $MODULES
+for MODULE in `cat $MODULES`
+do
+	DIR=`awk -f $WD/backup_reports.d/rsyncd_grep_module -v DESIRED_MODULE=$MODULE < /etc/rsyncd.conf | head -1`
+	if [ "a$DIR" != "a" ]
+	then
+		biocs_query $BACKUP_DB  "select backup.module,max(date) as last,round(max(total)/(1024*1024)) as total_size,avg(ttc) as time_to_complete from backup WHERE backup.module = \"$MODULE\" ORDER BY backup.module ASC" | sed "s,<TABLE BORDER=1><TR><TH>module</TH><TH>last</TH><TH>total_size</TH><TH>time_to_complete</TH></TR>,,g" | sed "s,</TABLE>,,g"
+
+		if [ -d $DIR ]
+		then
+			echo '<tr><td colspan="4">&nbsp;'
+			cd $DIR
+			du -hs daily* weekly* 2>/dev/null
+			cd - >/dev/null
+			echo "</td></tr>"
+		fi
+	fi
+
+done
+
+rm $MODULES
+echo "</table>"
