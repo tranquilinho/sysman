@@ -1,6 +1,11 @@
 #!/bin/bash
 
 [ -z "${sysman_scripts_dir}" ] && readonly sysman_scripts_dir=$(dirname $0)/..
+[ -z "${SYSMAN_LOGDIR}" ] && readonly SYSMAN_LOGDIR=/var/log
+readonly log_file=${SYSMAN_LOGDIR}/nas.log
+readonly log_facility="nas"
+
+# !!!! use named params
 
 if [ $# -lt 2 ]; then
 	echo "Syntax: $0 size volume_pattern_list"

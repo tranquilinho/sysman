@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# !!!! use named params
+
 if [ $# -ne 3 ]; then
     echo "Change the names \(volume and mount path\) of a local netrsc"
     echo "Syntax: $0 old_netpath new_netpath new_lv_name"
