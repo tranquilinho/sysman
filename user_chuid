@@ -1,0 +1,19 @@
+#!/bin/bash
+
+if [ $# -lt 3 ]; then
+    echo "Syntax: $0 login old_uid new_uid"
+    echo "Example: $0 john 255 7255"
+    exit 1
+fi
+
+login=$1
+old_uid=$2
+new_uid=$3
+
+usermod -u ${new_uid} ${login}
+echo "/etc/passwd and home files updated"
+
+echo "Changing UID in files outside /home..."
+find /tmp /var -uid ${old_uid} -exec chown ${new_uid} {} \;
+
+
