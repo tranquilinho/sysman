@@ -33,8 +33,8 @@ extra(){
 }
 
 prefered_here=$(parse_prefered)
-running_xen=$(${sysman_dir}/xen/list-domus | awk '{print $1 " XEN"}')
-running_dkr=$(${sysman_dir}/docker/list-containers | awk '{print substr($1,2) " DKR"}')
+running_xen=$(${sysman_dir}/xen_list_domus | awk '{print $1 " XEN"}')
+running_dkr=$(${sysman_dir}/docker/list_containers | awk '{print substr($1,2) " DKR"}')
 running_svc=$(${sysman_dir}/services_in_localhost | awk '{print $1 " SVC"}')
 running_vbx=$(${sysman_dir}/vm_list | awk '{print $1 " VBX"}')
 
