@@ -3,6 +3,6 @@
 readonly dkr_services=$(ps -ef | grep docker | grep services | sed 's_.*/services/\([^/]*\)/.*_\1_g' | uniq )
 
 if [ -d /services ]; then
-    readonly all_services=$(ps -ef | grep /services | egrep -v "grep|local-services|find-services|check-services" | sed "s_.*/services/\([^/]*\)/.*_\1_g" | grep -v "\^" | sort | uniq)
+    readonly all_services=$(ps -ef | grep /services | egrep -v "grep|services_in_localhost|find_services|services_in_host_check" | sed "s_.*/services/\([^/]*\)/.*_\1_g" | grep -v "\^" | sort | uniq)
     comm -13 <( echo -e ${dkr_services} | sort) <( echo -e ${all_services} | sort) | tr " " "\n"
 fi
