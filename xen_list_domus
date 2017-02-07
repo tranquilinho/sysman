@@ -1,0 +1,12 @@
+#!/bin/bash
+
+which xm >/dev/null 2>&1
+readonly xm_available=$?
+which xl >/dev/null 2>&1
+readonly xl_available=$?
+[ ${xm_available} -ne 0 -a ${xl_available} -ne 0 ] && exit 
+
+
+
+xl list 2>/dev/null | tail -n +3 
+xm list 2>/dev/null | tail -n +3 

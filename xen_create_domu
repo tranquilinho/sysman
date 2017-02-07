@@ -1,0 +1,106 @@
+#!/bin/bash
+# script to setup a domU in Debian
+
+# options are defaulted from /etc/xen-tools/xen-tools.conf
+
+# !!!! integrate post-install tasks script
+
+readonly log_file=/etc/xen/domu.log
+readonly localhostname=$(hostname)
+readonly service=domU
+readonly domUcmd=xen-create-image
+
+log(){
+    echo $(date +"%s %Y-%m-%d %H:%M:%S") ${localhostname} ${service} $1 >> ${log_file}
+}
+
+print_usage(){
+    echo "Create a new Xen domU"
+    echo "Syntax: $0 -n name -i ip -v os_vg [-V data_vg] [-r RAM] [-w swap] [-c cores] -p root_partition_size -d data_partition_size"
+    exit 1
+}
+
+cores=1
+ram=4Gb
+swap_size=4Gb
+
+if [ "$#" -ge 3 ]; then
+    while getopts "n:i:v:V:r:w:c:p:d:h" options; do
+        case "${options}" in
+            n)
+                readonly domUname=${OPTARG}
+                ;;
+            i)
+                readonly ip=${OPTARG}
+                ;;
+            v)
+                readonly os_vg=${OPTARG}
+                ;;
+            V)
+                data_vg=${OPTARG}
+                ;;
+	    r)
+		ram=${OPTARG}
+		;;
+	    w)
+		swap_size=${OPTARG}
+		;;
+	    c)
+		cores=${OPTARG}
+		;;
+	    p)
+		readonly root_size=${OPTARG}
+		;;
+	    d)
+		readonly data_size=${OPTARG}
+		;;
+	    h)
+		print_usage
+		;;
+            *)
+                echo "Unknow option" 1>&2 
+                print_usage
+                ;;
+        esac
+    done
+else
+    print_usage
+fi
+
+[ -z "${domUname}" -o -z "${ip}" -o -z "${os_vg}" -o -z "${root_size}" -o -z "${data_size}" ] && print_usage
+
+which ${domUcmd} > /dev/null 2>&1 
+[ $? -ne 0 ] && log "${domUcmd} not found" && exit 2
+
+readonly os_distribution="wheezy"
+readonly netmask="255.255.248.0"
+readonly gw="150.244.84.1"
+# --nameserver option complains that the servers are not IPv4... maybe it's a string escape problem?
+readonly nameservers="150.244.80.3 150.244.9.200"
+readonly fstype=ext4
+readonly cfg=${domUname}.cfg
+
+log "Creating domU ${domUname}"
+xen-create-image --hostname ${domUname} --dist=${os_distribution} --mirror="http://http.debian.net/debian" --lvm=${os_vg} --fs=${fstype} --memory=${ram} --size=${root_size} --swap=${swap_size} --vcpus=${cores} --ip=${ip} --netmask=${netmask} --gateway=${gw} 
+log "${domUname} created"
+
+[ -z "${data_vg}" ] && data_vg=${os_vg}
+readonly data_lv=${domUname}-data
+readonly os_lv=${domUname}-disk
+log "Setting up data volume ${data_lv}"
+if lvs | grep ${data_lv} > /dev/null 2>&1 ; then
+    log "Data volume already created"
+else
+    lvcreate ${data_vg} --name ${data_lv}  --size ${data_size} && mkfs -t ext4 -m 1 /dev/${data_vg}/${data_lv}
+
+    sed -i "s@disk *= \[ *\$@disk = \[ 'phy:/dev/${data_vg}/${data_lv},xvda3,w',@g" /etc/xen/${cfg}
+
+    [ ! -d /mnt/tmp ] && mkdir /mnt/tmp
+
+    mount /dev/${os_vg}/${os_lv} /mnt/tmp
+    readonly os_fstab=/mnt/tmp/etc/fstab
+    grep xvda3 ${os_fstab} || echo "/dev/xvda3    /services   ext4   defaults 0 2" >> ${os_fstab}
+    mkdir /mnt/tmp/services
+    umount /mnt/tmp
+fi
+log "Finished ${domUname}"
