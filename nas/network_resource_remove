@@ -1,7 +1,7 @@
 #!/bin/bash
 
 
-[ -z "${sysman_scripts_dir}" ] && readonly sysman_scripts_dir="$(dirname $0)/../.."
+[ -z "${sysman_scripts_dir}" ] && readonly sysman_scripts_dir="$(dirname $0)/.."
 [ -z "${SYSMAN_LOGDIR}" ] && readonly SYSMAN_LOGDIR=/var/log
 readonly log_file=${SYSMAN_LOGDIR}/san.log
 readonly log_facility="nas"
@@ -26,18 +26,21 @@ read
 readonly escnetpath=$(echo ${netpath} | sed 's_/_\\\/_g')
 # !!!! Use git?
 ci -l -m"remove net resource" -t-exports /etc/exports
-sed "/${escnetpath}/d" -i /etc/exports 
-exportfs -r
 ci -l -m"remove net resource" -t-fstab /etc/fstab
-sed "/${escnetpath}/d" -i /etc/fstab 
 
-readonly lvpath=$(mount | grep ${netpath} | awk '{print $1}')
-umount ${netpath}
 
+readonly lvpath=$(mount | grep ${netpath%%/} | awk '{print $1}')
 readonly step2="lvremove ${lvpath}"
-eval_and_log "${step2}"
 readonly step3="rmdir ${netpath}"
-eval_and_log "${step3}"
+
+[ -z "${lvpath}" ] && echo "LV path not found" && exit 2
+umount ${netpath} && \
+    eval_and_log "${step2}" && \
+    eval_and_log "${step3}" && \
+    sed "/${escnetpath}/d" -i /etc/exports && \
+    sed "/${escnetpath}/d" -i /etc/fstab 
+
+exportfs -r
 
 echo "Remember to update backup config if needed"
 

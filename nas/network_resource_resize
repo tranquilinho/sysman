@@ -26,9 +26,9 @@ readonly lvpath
 
 readonly size_without_units=$(echo ${size} | sed 's_[^0-9+-]*\([+-]\?[0-9]*\)[^0-9]*_\1_g')
 readonly dir=$(${sysman_scripts_dir}/nas/mountpoint_of_lv ${lvpath})
-readonly current_size=$(/etc/sysman/san/size_network_resource.sh ${dir})
+readonly current_size=$(${sysman_scripts_dir}/nas/network_resource_size ${dir})
 readonly current_size_without_units=$(echo ${current_size} | sed 's_[^0-9+-]*\([+-]\?[0-9]*\)[^0-9]*_\1_g')
-fstype=$(/etc/sysman/san/lv_fstype.sh ${lvpath})
+fstype=$(${sysman_scripts_dir}/nas/lv_fstype ${lvpath})
 
 if [ ${size:0:1} == "+" -o ${size_without_units} -ge ${current_size_without_units} ]; then
     [ -z "${fstype}" ] && fstype=ext4
@@ -39,7 +39,7 @@ if [ ${size:0:1} == "+" -o ${size_without_units} -ge ${current_size_without_unit
     fi
 else
     if [ ${size_without_units} -lt 0 ]; then
-	new_size=$(/etc/sysman/san/size_calculator.rb ${current_size} + ${size})
+	new_size=$(${sysman_scripts_dir}/nas/size_calculator.rb ${current_size} + ${size})
     else
 	new_size=${size}
     fi
