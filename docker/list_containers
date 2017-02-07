@@ -1,0 +1,13 @@
+#!/bin/bash
+
+if which docker.io >/dev/null 2>&1 ; then
+    docker_cmd=docker.io
+elif which docker >/dev/null 2>&1 ; then
+    docker_cmd=docker
+else
+    exit
+fi
+
+${docker_cmd} ps | tail -n +2 | cut -d " " -f 1 | while read container_id; do
+    ${docker_cmd} inspect --format="{{.Name}} {{.NetworkSettings.IPAddress}} {{.HostConfig.PortBindings}}" ${container_id}
+ done
