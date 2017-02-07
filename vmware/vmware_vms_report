@@ -1,0 +1,14 @@
+#!/bin/bash
+if [ $# -ne 1 ]
+then
+    echo Syntax: $0 vmware_host
+    exit 1
+fi
+
+SCRIPTS_DIR=/etc/sysman/vmware
+HOST=$1
+
+# Default columns: NAS_name vmid startup_order vmname vmx_path NAS_host NAS_path
+join <(/$SCRIPTS_DIR/vmware_get_autostart.sh $HOST) <($SCRIPTS_DIR/vmware_get_allvms.sh $HOST) | tee -a debug.txt | sort -k 4 | join -1 4 - <($SCRIPTS_DIR/vmware_get_nas.sh -h ${HOST}) | tee -a debug.txt | awk '{print $4 " " $6 " " $7 "/" $5}'
+
+

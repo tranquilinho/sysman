@@ -1,0 +1,63 @@
+#!/bin/bash
+
+# !!!! connect to VMware servers with unpriviledged account
+
+readonly custom_check_dir=$(dirname $(dirname $0))
+
+[ -z "${custom_checks_cfg}" ] && readonly custom_checks_cfg=${custom_check_dir}/custom_check.cfg
+
+. ${custom_checks_cfg}
+
+readonly CMD="esxcfg-nas -l"
+short=0
+
+print_syntax(){
+    echo Syntax: $0 vmware_host
+    exit 1
+}
+
+if [ "$#" -eq 0 ]; then
+    print_syntax
+else
+    while getopts "h:s" options; do
+	case "${options}" in
+            h)
+		readonly host=${OPTARG}
+	    ;;
+	    s)
+		short=1
+	    ;;
+	    *)
+		print_syntax
+	esac
+    done
+fi
+
+if [ -z "${host}" ]; then
+    print_syntax
+fi
+
+# ssh commands may "hang" waiting for password, hence the watchdog of 5 seconds
+watchdog 5
+
+IFS=$'\n'
+
+# using the readonly modifier interferes in $? (readonly does not fail)
+nas_cfg=($( ssh -o BatchMode=yes root@${host} "${CMD}" ; exit $? ))
+error=$?
+[ ${error} -ne 0 ] && exit ${error}
+
+for line in ${nas_cfg[@]}; do
+    # Line columns: NAS_name is PATH from HOST mounted    
+    # Glassfishprod is /nas/vm/glassfishprod from faraday.cnb.csic.es mounted available
+    nas_name=$( expr match "${line}" "\([^ ]*\) [^ ]* [^ ]* [^ ]* [^ ]* [^ ]*.*" )
+    if [ ${short} -eq 1 ]; then
+	echo ${nas_name}
+    else
+	nas_path=$( expr match "${line}" "[^ ]* [^ ]* \([^ ]*\) [^ ]* [^ ]* [^ ]*.*" )
+	nas_server=$( expr match "${line}" "[^ ]* [^ ]* [^ ]* [^ ]* \([^ ]*\) [^ ]*.*" )
+	echo "[${nas_name}]" ${nas_server} ${nas_path}
+    fi
+done
+
+exit 0

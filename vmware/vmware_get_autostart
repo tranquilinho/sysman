@@ -1,0 +1,25 @@
+#!/bin/bash
+if [ $# -ne 1 ]
+then
+    echo Syntax: $0 vmware_host
+    exit 1
+fi
+
+HOST=$1
+CMD="vim-cmd hostsvc/autostartmanager/get_autostartseq"
+
+ssh root@$HOST "$CMD" | egrep "key|startOrder" | while read KEY EQ VALUE
+do
+#    KEY=`expr match "$LINE" "\(.*\) = .*"`
+    if [ $KEY == key ]
+	then
+	VMID=`expr match "$VALUE" ".*:\([0-9].*\)'.*"`
+    elif [ $KEY == startOrder ]
+	then
+	ORDER=`expr match "$VALUE" "\([-]*[0-9]*\),.*"`
+	if [ $ORDER != "-1" ]
+	    then
+	    echo $VMID $ORDER
+	    fi
+    fi
+done | sort

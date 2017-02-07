@@ -1,0 +1,2 @@
+mkdir /.ssh
+mv /vmfs/volumes/datastore1/authorized_keys /.ssh

@@ -1,0 +1,22 @@
+#!/bin/bash
+if [ $# -ne 1 ]
+then
+    echo Syntax: $0 vmware_host
+    exit 1
+fi
+
+HOST=$1
+CMD="vim-cmd vmsvc/getallvms"
+VMXBASE=/vmfs/volumes
+SCRIPTS_DIR=/etc/sysman/vmware
+VMXDIR=$SCRIPTS_DIR/vmx
+SSH_URI=root@$HOST
+
+# Columns: Vmid Name [NAS] File Guest_OS Version Annotation
+ssh $SSH_URI "$CMD" | awk '{print $1 " " $2 " " $3 " " $4}' | tail -n +2 | sort | while read VMID VMNAME NASBRACKETS SUBPATH
+do
+    echo $VMID $VMNAME $NASBRACKETS $SUBPATH
+    NAS=`expr match "$NASBRACKETS" "\[\(.*\)\]"`
+    VMXPATH=$VMXBASE/$NAS/$SUBPATH
+    rsync -a $SSH_URI:$VMXPATH $VMXDIR
+done
