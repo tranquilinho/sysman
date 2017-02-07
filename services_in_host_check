@@ -1,11 +1,12 @@
 #!/bin/bash
 
 [ -z "${sysman_scripts_dir}" ] && readonly sysman_scripts_dir=$(dirname $0)
+[ -z "${SYSMAN_ETC}" ] && readonly SYSMAN_ETC=/etc/sysman
 
 readonly host=$(hostname -s)
 
 parse_prefered(){
-    grep ${host} ${sysman_dir}/services/prefered-service-location | while read prefered_host type name; do
+    grep ${host} ${SYSMAN_ETC}/services/prefered-service-location | while read prefered_host type name; do
 	case ${type} in
 	    XEN|DKR|SVC|VBX)
 		echo "${name} ${type}"
@@ -33,10 +34,10 @@ extra(){
 }
 
 prefered_here=$(parse_prefered)
-running_xen=$(${sysman_dir}/xen/list-domus | awk '{print $1 " XEN"}')
-running_dkr=$(${sysman_dir}/docker/list-containers | awk '{print substr($1,2) " DKR"}')
-running_svc=$(${sysman_dir}/services/local-services | awk '{print $1 " SVC"}')
-running_vbx=$(${sysman_dir}/virtualbox/list-vms | awk '{print $1 " VBX"}')
+running_xen=$(${sysman_scripts_dir}/xen/list-domus | awk '{print $1 " XEN"}')
+running_dkr=$(${sysman_scripts_dir}/docker/list-containers | awk '{print substr($1,2) " DKR"}')
+running_svc=$(${sysman_scripts_dir}/services/local-services | awk '{print $1 " SVC"}')
+running_vbx=$(${sysman_scripts_dir}/virtualbox/list-vms | awk '{print $1 " VBX"}')
 
 readonly missing_xen=$(missing XEN "${prefered_here}" "${running_xen}")
 readonly extra_xen=$(extra XEN "${prefered_here}" "${running_xen}")
