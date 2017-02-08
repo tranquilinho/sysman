@@ -2,7 +2,7 @@
 # With no argument, show the date of last backup for all users
 # With 1 argument, show last backups of a user
 DB=backup
-BDIR=/etc/san/reports/
+BDIR=/etc/sysman/nas_reports/
 
 . $BDIR/biocs_mysql_query.sh
 

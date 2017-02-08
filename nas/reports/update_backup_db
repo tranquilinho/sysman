@@ -1,8 +1,8 @@
 #!/bin/bash
 # Update the backup database 
 #
-BDIR=/etc/san/reports/
+BDIR=/etc/sysman/nas_reports/
 
 # . $BDIR/biocs_mysql_query.sh
 
-cat /var/log/rsyncd.log | awk -f $BDIR/backup_log_to_db.awk | $BDIR/biocs_mysql_query.sh -
+cat /var/log/rsyncd.log | awk -f /usr/local/sysman/nas/reports/backup_log_to_db.awk | $BDIR/biocs_mysql_query.sh -

@@ -5,8 +5,8 @@
 #	- don't do snapshot of directories without recent backup
 #	- report skipped directories
 
-BDIR=/etc/san/reports/
-SDIR=/etc/san/snapshots
+BDIR=/usr/local/sysman/nas/reports
+SDIR=/usr/local/sysman/nas
 SNAPSHOT=$SDIR/rotate_snapshot.sh
 
 LOG_FILE=/var/log/snapshot.log
@@ -58,7 +58,7 @@ cat /etc/rsyncd.conf | awk -f $SDIR/extract_rsync_modules.awk > $MODULES_PATHS
 TODAY=`date +%m/%d/%y`
 
 echo Started at `date` >> $LOG_FILE
-$BDIR/update_backup_db
+# !!!! $BDIR/update_backup_db
 
 # !!!! Fix date_math location
 . $SDIR/date_math.sh
