@@ -84,7 +84,7 @@ fi
 
 [ -z "${cmd}" ] && print_usage
 
-[ -z "${ssh_stdin}" ] && readonly ssh_stdin="-"
+[ -z "${ssh_stdin}" ] && readonly ssh_stdin="/dev/null"
 
 log_file=${dsh_log}
 
