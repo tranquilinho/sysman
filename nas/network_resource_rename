@@ -28,17 +28,17 @@ ci -l  -m"rename net resource" -t-fstab /etc/fstab
 
 readonly lvpath=$(grep ${oldnetpath} /etc/fstab | awk '{print $1}')
 readonly baselvpath=$(dirname ${lvpath})
-readonly ${newlvpath}="${baselvpath}/${newlvname}"
+readonly newlvpath="${baselvpath}/${newlvname}"
 escoldlvpath=$(echo ${lvpath} | sed 's_/_\\\/_g')
 escnewlvpath=$(echo ${newlvpath} | sed 's_/_\\\/_g')
 
 sed "s/${escoldnetpath}/${escnewnetpath}/g" -i /etc/fstab 
 sed "s/${escoldlvpath}/${escnewlvpath}/g" -i /etc/fstab 
-umount ${oldnetpath}
-lvrename ${lvpath} ${newlvpath}
-mkdir -p ${newnetpath}
-rmdir ${oldnetpath}
-mount ${newnetpath}
+umount ${oldnetpath} && \
+lvrename ${lvpath} ${newlvpath} && \
+mkdir -p ${newnetpath} && \
+rmdir ${oldnetpath} && \
+mount ${newnetpath} 
 
 echo "Remember to update backup config if needed"
 
