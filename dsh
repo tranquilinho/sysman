@@ -17,7 +17,7 @@ dsh_log=${SYSMAN_LOGDIR}/dsh.log
 
 
 print_usage(){
-    echo "Syntax $0 [ -f server_file -l server_comma_list -o log_file -v -h] -c command"
+    echo "Syntax $0 [ -f server_file -l server_comma_list -o log_file -v -h -i input_file] -c command"
     echo "Example: $0 my_servers -v -l host1,host2 -c \"ls -l /etc\""
     exit 1
 }
@@ -47,7 +47,7 @@ load_servers(){
 
 
 if [ $# -ge 2 ]; then
-    while getopts "f:l:u:c:o:vh" options; do
+    while getopts "f:l:u:c:o:i:vh" options; do
 	case "${options}" in
 	    v)
 		readonly verbose=0
@@ -70,6 +70,9 @@ if [ $# -ge 2 ]; then
 	    c)
 		readonly cmd="${OPTARG}"
 		;;
+	    i)
+		readonly ssh_stdin="${OPTARG}"
+		;;
 	    *)
 		echo Unknown option
 		print_usage
@@ -80,6 +83,8 @@ else
 fi
 
 [ -z "${cmd}" ] && print_usage
+
+[ -z "${ssh_stdin}" ] && readonly ssh_stdin="/dev/null"
 
 log_file=${dsh_log}
 
@@ -110,7 +115,7 @@ for server in "${servers[@]}"; do
 	if [ $? -eq 255 ]; then
 	    log "${critical} Problem connecting to ${server}:${port_param}"
 	else
-	    ssh -o ConnectTimeout=1 -o StrictHostKeyChecking=no ${port_param} ${remote_user}@${server} "${cmd}" 2>&1 | logalize ${dsh_log} | while read output_line; do
+	    cat ${ssh_stdin} | ssh -o ConnectTimeout=1 -o StrictHostKeyChecking=no ${port_param} ${remote_user}@${server} "${cmd}" 2>&1  | logalize ${dsh_log} | while read output_line; do
 	# !!!! adapting logalize, this local printing would not be necessary
 		printf "%16s %s %s\n" "${host}" "${aligned_ip}" "${output_line}"
 	    done
