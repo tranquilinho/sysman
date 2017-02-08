@@ -41,7 +41,7 @@ else
 fi
 
 lvpath=/dev/${from_vg}/${from_lv}
-fstype=$(/etc/sysman/san/lv_fstype.sh ${lvpath})
+fstype=$(${sysman_scripts_dir}/nas/lv_fstype ${lvpath})
 
 # !!!! make snapshot size & name configurable
 /sbin/lvcreate -L8G -s -n vmsnapshot ${lvpath}

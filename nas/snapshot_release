@@ -39,7 +39,7 @@ else
 fi
 
 lvpath=/dev/${from_vg}/${from_lv}
-fstype=$( ${sysman_scripts_dir}/nas/lv_fstype.sh ${lvpath} )
+fstype=$( ${sysman_scripts_dir}/nas/lv_fstype ${lvpath} )
 
 mountdir=/snapshot/${from_vg}/${from_lv}
 

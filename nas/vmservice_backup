@@ -55,14 +55,14 @@ for p in ${profiles}; do
 		[ ${PIPESTATUS[0]} -eq 0 ] && touch ${dir}.last_vmsbackup
 	    done
 
-	    vtype=$(expr match "$(grep vtype= ${P})" "vtype=\(.*\)" )
+	    vtype=$(expr match "$(grep vtype= ${p})" "vtype=\(.*\)" )
 	    if [ -z "${vtype}" ]; then
 		vtype=esx
 	    fi
 	    log "${info} Backing-up virtual machine..."
 	    backup_dest="${backup_host}:${backup_path}"
 	    [ ${vtype} == "xen" ] && backup_dest=${backup_dest}/${lv}
-	    ${sysman_scripts_dir}/nas/vmbackup -v ${VG} -l ${lv} -t ${backup_dest} -k ${vtype} | logalize ${log_file}
+	    ${sysman_scripts_dir}/nas/vmbackup -v ${vg} -l ${lv} -t ${backup_dest} -k ${vtype} | logalize ${log_file}
 	    ;;
 	mirror)
 	    line=$(grep vm= ${p})
@@ -83,7 +83,7 @@ for p in ${profiles}; do
 		watchdog ${rsync_max_time} rsync -av --delete ${mirror_source} ${dir} | logalize ${log_file}
 	    done
 
-	    vtype=$(expr match "$(grep vtype= ${P})" "vtype=\(.*\)" )
+	    vtype=$(expr match "$(grep vtype= ${p})" "vtype=\(.*\)" )
 	    [ -z "${vtype}" ] && vtype=esx
 	    if [ ${vtype} == xen ]; then
 		line=$(grep mirror= ${p})
@@ -112,7 +112,7 @@ for p in ${profiles}; do
 
 		log "${info} REPLICATING SERVICE ${service}"
 
-		data_dirs=$(grep data= ${P})
+		data_dirs=$(grep data= ${p})
 		log "${info} Replicating data..."
 		replica_host=$(expr match ${line} "replicas=\(.*\):.*:.*:.*:.*")
 		replica_path=$(expr match ${line} "replicas=.*:.*:.*:\(.*\):.*")
@@ -138,7 +138,7 @@ for p in ${profiles}; do
 		service=$(expr match ${line} "vm=\(.*\)")
 		echo "Setup netrscs in this host for replicas of ${service}"
 		echo "Data dirs"
-		line=$(grep backup= ${P})
+		line=$(grep backup= ${p})
 		backup_host=$(expr match ${line} "backup=\(.*\):.*:.*:.*")
 		data_dirs=$(grep data= ${p})
 		line=$(grep replicas= ${p})
