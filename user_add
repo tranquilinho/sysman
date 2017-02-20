@@ -77,9 +77,12 @@ search_group_db
 
 [ -z "${uid}" ] || [ -z "${gid}" ] && echo "UID / GID not found" && exit 2
 
-echo ${uid} ${gid}
+# echo ${uid} ${gid}
 
-add_new_group ${host}
+echo "Remote group: "
+add_new_group ${host} ${group} ${gid}
+
+# !!!! .ssh/authorized_keys is created with root ownership?
 
 readonly create_home="-m"
 [ ${group} == bioinfo ] && duration=15552000
