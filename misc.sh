@@ -45,7 +45,9 @@ add_new_user(){
 add_new_group(){
     log_facility="accounting"
     local server=$1
-    ssh  ${SSH_USER}${server} "grep ${group} /etc/group || groupadd -g ${gid} ${group}"
+    local new_group=$2
+    local new_gid=$3
+    ssh  ${SSH_USER}${server} "grep ${new_group} /etc/group || groupadd -g ${new_gid} ${new_group}"
     return $?
 }
 
