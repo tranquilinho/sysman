@@ -1,0 +1,28 @@
+#!/bin/bash
+
+[ -z "${sysman_scripts_dir}" ] && readonly sysman_scripts_dir=$(dirname $0)/..
+
+
+if [ $# -lt 1 ]; then
+        echo "Syntax: $0 volume_pattern_list"
+        echo "Example: $0 backup john server1"
+        exit 1
+fi
+
+
+readonly lvpathlist=$(mktemp)
+${sysman_scripts_dir}/nas/find_mounted_volume "$@" > ${lvpathlist}
+
+readonly lvcount=$(cat ${lvpathlist} | wc -l)
+if [ ${lvcount} -gt 1 ]; then
+    echo "The pattern list matched more than one network resource:"
+    cat ${lvpathlist}
+    echo "Please be more specific"
+    exit 2
+elif [ ${lvcount} -eq 0 ]; then
+    echo "No resource found matching the pattern list"
+    exit 1
+fi
+
+cat ${lvpathlist}
+rm ${lvpathlist}

@@ -1,0 +1,14 @@
+#!/bin/bash
+
+if [ $# -ne 2 ]; then
+    echo "Syntax: $0 netpath nfshosts_comma_list"
+    echo "Example: $0 /nas/backup/joe host1,host2"
+    exit 1
+fi
+
+readonly netpath=$1
+readonly nfshosts=$2
+
+readonly nfsperm=$(echo ${nfshosts} | sed 's/,\|$/(rw,no_subtree_check,no_root_squash) /g')
+echo "${netpath}  ${nfsperm}">> /etc/exports 
+exportfs -r

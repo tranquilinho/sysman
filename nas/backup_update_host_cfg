@@ -1,0 +1,68 @@
+#!/bin/bash
+
+if [ $# -ne 1 ]
+then
+	echo Syntax: $0 backup_host
+	exit 1
+fi
+BACKUP_HOST=$1
+
+CONF_DIR=/etc/sysman/backup
+RSYNC_CONFS_DIR=$CONF_DIR/rsyncd.confs
+RSYNC_CONF=$CONF_DIR/$(hostname)
+AUTHORIZED_KEYS=/root/.ssh/authorized_keys
+VALID_KEYS=$CONF_DIR/valid_keys
+SM_KEY=$VALID_KEYS/deployer
+
+cd ${CONF_DIR}
+git pull
+
+declare -A client_key_handled
+
+cat $RSYNC_CONFS_DIR/header > $RSYNC_CONF
+cat $SM_KEY > $AUTHORIZED_KEYS
+# Allow hosts to ssh themselves
+readonly self=$(hostname -f)
+SELF_KEY=$VALID_KEYS/${self}
+cat $SELF_KEY >> $AUTHORIZED_KEYS
+client_key_handled[${self}]=1
+
+
+for f in $(grep -l "backup_host=$BACKUP_HOST" $RSYNC_CONFS_DIR/*); do
+	OPTIONS_INCLUDE=`grep "# include=" $f | cut -d= -f 2`
+	CLIENTS=`mktemp`
+	# comma-delimited list...
+	grep "hosts allow" ${f} | awk '{print $NF}' | tr "," "\n" > ${CLIENTS}
+	grep "service key" ${f} | awk '{print $NF}' >> ${CLIENTS}
+	BACKUP_PATH=$(grep "path =" $f | awk '{print $NF}')
+	cat $f $RSYNC_CONFS_DIR/$OPTIONS_INCLUDE >> $RSYNC_CONF
+	for client in $(cat $CLIENTS); do
+	    if [ -z "${client_key_handled[$client]}" ]; then
+		if [ -f ${VALID_KEYS}/${client} ]; then
+		    cat ${VALID_KEYS}/${client} >> ${AUTHORIZED_KEYS}
+		else
+		    echo key for ${client} not found
+		fi
+		client_key_handled[${client}]=1
+	    fi
+	done
+	rm $CLIENTS
+	if [ -n "${BACKUP_PATH}" ]; then 
+	    mountpoint ${BACKUP_PATH} > /dev/null
+	    if [ $? -ne 0 ]; then
+		echo Backup path $BACKUP_PATH not mounted...
+		if [ -d $BACKUP_PATH ]; then
+		    BASE=`dirname $BACKUP_PATH`
+		    MOUNTPOINT=`mount | grep $BASE | awk '{print $3}'`
+		    echo ... but it exists and belongs to $MOUNTPOINT
+		else		
+		    # dump the setup command to a batch file and print it at the end of this script
+		    echo setup...
+		fi
+	    fi
+	fi
+done
+
+git commit -a -m "Auto - backup_update_host_cfg"
+git push
+/etc/init.d/rsync restart

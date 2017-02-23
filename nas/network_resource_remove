@@ -1,0 +1,46 @@
+#!/bin/bash
+
+
+[ -z "${sysman_scripts_dir}" ] && readonly sysman_scripts_dir="$(dirname $0)/.."
+[ -z "${SYSMAN_LOGDIR}" ] && readonly SYSMAN_LOGDIR=/var/log
+readonly log_file=${SYSMAN_LOGDIR}/san.log
+readonly log_facility="nas"
+
+. ${sysman_scripts_dir}/misc.sh
+
+if [ $# -ne 1 ];then
+	echo "Syntax: $0 netrsc_path"
+	echo "Example: $0 /nas/backup/joe"
+	exit 1
+fi
+
+readonly netpath=$1
+
+log "${info} Removing ${netpath}"
+
+echo "Resource NFS status:"
+showmount -a | grep ${netpath}
+echo "Press any key to continue with the removal..."
+read
+
+readonly escnetpath=$(echo ${netpath} | sed 's_/_\\\/_g')
+# !!!! Use git?
+ci -l -m"remove net resource" -t-exports /etc/exports
+ci -l -m"remove net resource" -t-fstab /etc/fstab
+
+
+readonly lvpath=$(mount | grep ${netpath%%/} | awk '{print $1}')
+readonly step2="lvremove ${lvpath}"
+readonly step3="rmdir ${netpath}"
+
+[ -z "${lvpath}" ] && echo "LV path not found" && exit 2
+umount ${netpath} && \
+    eval_and_log "${step2}" && \
+    eval_and_log "${step3}" && \
+    sed "/${escnetpath}/d" -i /etc/exports && \
+    sed "/${escnetpath}/d" -i /etc/fstab 
+
+exportfs -r
+
+echo "Remember to update backup config if needed"
+

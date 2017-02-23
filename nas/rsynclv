@@ -1,0 +1,81 @@
+#!/bin/bash
+
+# from http://serverfault.com/questions/27397/sync-lvm-snapshots-to-backup-server/168034#168034
+
+print_usage(){
+    echo Rsync-like block device copy
+    echo Syntax: $0 -f source_device -t server:dest_path \[-1\|-3\]
+    echo Mode "-1" copies the whole device
+    echo Mode "-3" copies only the changed sectors \(currently it does not work...\)
+    echo Example: $0 -f /dev/sda3 -t server:/backup/disks/sda3
+    exit 1
+}
+
+whole_copy=0
+if [ "$#" -ge 3 ]; then
+    while getopts "t:f:p:12345" options; do
+	case "${options}" in
+	    1)
+		step=1
+		;;
+	    2)
+		step=2
+		;;
+	    3)
+		step=3
+		;;
+	    4)
+		step=4
+		;;
+	    5)
+		step=5
+		;;
+
+	    f)
+		readonly dev_from=${OPTARG}
+		;;
+	    t)
+		readonly server_to=${OPTARG}
+		;;
+	    p)
+		readonly path_to=${OPTARG}
+		;;
+            *)
+		echo "Unknow option" 1>&2 
+		print_usage
+		;;
+	esac
+    done
+    shift $((OPTIND-1))
+else
+    print_usage
+fi
+
+export  rlv_block_size=8192
+
+case ${step} in
+     1)
+        dd if=${dev_from} bs=128M | ssh ${server_to} "/etc/san/rsynclv -p ${path_to} -2"		
+	;;
+     2)
+	dd of=${path_to}
+	;;
+# rsync-like mode of operation
+# !!!! currently it copies less blocks, resulting in an invalid file on the destination
+     3)
+	ssh  ${server_to} "/etc/san/rsynclv -p ${path_to} -4" | 
+	    perl -'MDigest::MD5 md5' -ne 'BEGIN{$/=1024};$b=md5($_);
+	        read STDIN,$a,16;if ($a eq $b) {print "s"} else {print "c" . $_}' ${dev_from} | 
+		ssh  ${server_to} "/etc/san/rsynclv -p ${path_to} -5"
+      ;;
+    4)
+	perl -'MDigest::MD5 md5' -ne 'BEGIN{$/=1024};print md5($_)' ${path_to} 
+	;;
+    5)
+	perl -ne 'BEGIN{$/=1} if ($_ eq "s") {$s++} else {if ($s) {
+		      seek STDOUT,$s*1024,1; $s=0}; read ARGV,$buf,1024; print $buf}' 1<> ${path_to}
+	;;
+    *)
+	echo Unknown step
+	;;
+esac     

@@ -1,0 +1,78 @@
+#!/bin/bash
+
+[ -z "${sysman_scripts_dir}" ] && readonly sysman_scripts_dir=$(dirname $0)/..
+[ -z "${SYSMAN_LOGDIR}" ] && readonly SYSMAN_LOGDIR=/var/log
+
+readonly log_file=${SYSMAN_LOGDIR}/nas.log
+readonly log_facility="nas"
+. ${sysman_scripts_dir}/misc.sh
+
+
+readonly nas_scripts_dir=${sysman_scripts_dir}/nas
+
+print_usage(){
+    echo "Do a backup of a VM in a LV"
+    echo "Syntax: $0 -v source_vg -l source_lv -t servert_to_url -k \[xen\|esx\|vbx\]"
+    echo "Example: $0 -v vg4 -l vm2-os -t server:/backup/vm -k xen"
+    exit 1
+}
+
+if [ "$#" -ge 3 ]; then
+    while getopts "t:v:l:k:" options; do
+	case "${options}" in
+	    v)
+		readonly from_vg=${OPTARG}
+		;;
+	    l)
+		readonly from_lv=${OPTARG}
+		;;
+	    t)
+		readonly to_server_url=${OPTARG}
+		;;
+	    k)
+		readonly vm_kind=${OPTARG}
+		;;
+            *)
+		echo "Unknow option" 1>&2 
+		print_usage
+		;;
+	esac
+    done
+    shift $((OPTIND-1))
+else
+    print_usage
+fi
+
+# !!!! make mountdir configurable
+readonly mountdir=/snapshot/${from_vg}/${from_lv}
+readonly lvsnapshotpath=/dev/${from_vg}/vmsnapshot
+readonly RSYNC_MAX_TIME=7200
+
+log "${info} Vmbackup started (${from_vg}/${from_lv}->${to_server_url})"
+case "${vm_kind}" in
+    esx)
+	${nas_scripts_dir}/snapshot_create -v ${from_vg} -l ${from_lv}
+	# !!!! add & test watchdog ${RSYNC_MAX_TIME}
+	rsync -av --exclude /broken_vmdk --exclude "*.vswp" --inplace ${mountdir}/ ${to_server_url}
+	;;
+    vbx)
+	${nas_scripts_dir}/snapshot_create -v ${from_vg} -l ${from_lv}
+	# !!!! add & test watchdog ${RSYNC_MAX_TIME}
+	rsync -av -e "ssh -c arcfour" --exclude "*.vswp" --inplace ${mountdir}/ ${to_server_url}
+	;;
+    xen)
+	${nas_scripts_dir}/snapshot_create -v ${from_vg} -l ${from_lv} -n
+	# currently rsync requires a patch for copying block devices, and its performance is said to be quite poor...
+	readonly to_server=$(expr match "${to_server_url}"  "\(.*\):.*")
+	readonly to_path=$(expr match "${to_server_url}"  ".*:\(.*\)")
+
+	${nas_scripts_dir}/rsynclv -f ${lvsnapshotpath} -t ${to_server} -1 -p ${to_path}
+	;;
+    *)
+	echo "Unknown VM kind"
+	;;
+esac
+
+log "${info} Vmbackup finished (${from_vg}/${from_lv}->${to_server_url})"
+
+${nas_scripts_dir}/snapshot_release -v ${from_vg} -l ${from_lv}

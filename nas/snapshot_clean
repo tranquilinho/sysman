@@ -1,0 +1,21 @@
+#!/bin/bash
+SNAPSHOT_DIR=/nas/snapshots
+OLD=+10
+VERY_OLD=+30
+
+# big(>500MB)+old(>10days)
+find $SNAPSHOT_DIR -type d -name "[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]" -mtime $OLD -exec du -s {} \; |  awk '{if ($1 > 500000) print $0}' | while read SIZE D
+do
+	# echo Deleting $D \($SIZE\)...
+	rm -rf $D
+done
+
+# very old (>30 days)
+find $SNAPSHOT_DIR -type d -name "[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]" -mtime $VERY_OLD | while read D
+do
+	DU=($(du -s $D))
+	SIZE=${DU[0]}
+	# echo Deleting $D \($SIZE\) ...
+	rm -rf $D
+done
+

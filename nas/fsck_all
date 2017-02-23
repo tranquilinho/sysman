@@ -1,0 +1,15 @@
+#!/bin/bash
+
+[ -z "${sysman_scripts_dir}" ] && readonly sysman_scripts_dir=$(dirname $0)/..
+
+
+for R in $(grep "/nas" /etc/fstab | grep -v "^#" | awk '{print $1}'); do
+    mapper_lv=$(${sysman_scripts_dir}/nas/lv_to_mapper ${R})
+    mount | grep ${mapper_lv} > /dev/null
+    if [ $? -eq 0 ]; then
+	echo "${R} mounted"
+    else
+	echo "${R} not mounted"
+	fsck -y ${R}
+    fi
+done

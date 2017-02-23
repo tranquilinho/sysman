@@ -1,0 +1,33 @@
+#!/bin/bash
+
+
+[ -z "${sysman_scripts_dir}" ] && readonly sysman_scripts_dir="$(dirname $0)/../.."
+[ -z "${SYSMAN_LOGDIR}" ] && readonly SYSMAN_LOGDIR=/var/log
+readonly log_file=${SYSMAN_LOGDIR}/nas.log
+readonly log_facility="replicas"
+
+. ${sysman_scripts_dir}/misc.sh
+
+
+# !!!! log progress at dst?
+
+# !!!! make replicas_dir configurable
+replicas_dir=/nas/replicas
+
+# !!!! switch to named parameters?
+if [ $# -ne 2 ]; then
+    echo "Syntax: $0 nas_src server vg"
+    echo "Example: $0 /nas/backup/joe/work/aa 40G"
+    exit 1
+fi
+
+readonly src=$1
+# No / in between two because ${src} is absolute...
+replica_dir=${replicas_dir}${src}
+readonly size=$2
+readonly vg=$(${sysman_scripts_dir}/nas/suggest_vg ${size} | head -1)
+
+readonly lvname="replica$(echo ${src} | sed 's_/nas__g' | tr '/' '-')"
+
+${sysman_scripts_dir}/nas/network_resource_setup -v ${vg} -l ${lvname} -s ${size} -p ${replica_dir} 
+

@@ -1,0 +1,11 @@
+#!/bin/bash
+
+if [ $# -ne 1 ];then
+    echo "Syntax: $0 lv"
+    echo "Example: $0 /dev/vg1/volume2"
+    exit 1
+fi
+
+readonly lv=$1
+
+echo ${lv} | sed 's%-%--%g' | sed 's%/dev/\(.*\)/\([a-zA-Z0-9-]*\)%/dev/mapper/\1-\2%g'

@@ -1,0 +1,41 @@
+#!/bin/bash
+
+[ -z "${sysman_scripts_dir}" ] && readonly sysman_scripts_dir=$(dirname $0)/..
+readonly scripts_base=/etc/sysman/san/netrsc
+
+
+if [ "$#" -lt 3 ]; then
+    while getopts "v:l:s:p:f:t:" options; do
+	case "${options}" in
+            v)
+		readonly vg="${OPTARG}"
+		;;
+	    l)
+		readonly lv="${OPTARG}"
+		;;
+	    p)
+		readonly clone_mountpoint="${OPTARG}"
+		;;
+	    f)
+		readonly tags="${OPTARG/,/ }"
+		;;
+	esac
+    done
+else
+    echo "Duplicate a network resource" 
+    echo "Syntax:  $0 -f tag_list     -v clone_vg -p clone_path [-l clone_lv]"
+    echo "Example: $0 -f work,joe,pc2 -v othervg  -p /nas/work/joe-clone -l joe-work-clone"
+    exit 1
+fi
+
+readonly old_lvpath=$(${sysman_scripts_dir}/nas/find_single_volume ${tags})
+if [ -z "${lv}" ]; then
+    readonly lv=${old_lvpath##*/}
+fi
+
+# by now assume size is fixed in GB
+readonly size="$(lvdisplay ${old_lvpath} | grep "LV Size" | awk '{print $3}')G"
+
+${sysman_scripts_dir}/nas/network_resource_setup -v ${vg} -l ${lv} -s ${size} -p ${clone_mountpoint}
+
+echo "Remember to update backup_hosts and remove old volume if needed"

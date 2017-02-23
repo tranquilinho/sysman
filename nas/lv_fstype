@@ -1,0 +1,12 @@
+#!/bin/bash
+
+if [ $# -lt 1 ];then
+    echo "Syntax: $0 lv_path"
+    echo "Example: $0 /dev/vg1/john-backup"
+    exit 1
+fi
+
+readonly lvpath=$1
+
+grep "${lvpath} " /etc/fstab | awk '{print $3}'
+

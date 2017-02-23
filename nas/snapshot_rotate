@@ -1,0 +1,102 @@
+#!/bin/bash
+# ----------------------------------------------------------------------
+# mikes handy rotating-filesystem-snapshot utility
+# ----------------------------------------------------------------------
+# Original from http://www.mikerubel.org/computers/rsync_snapshots/index.html
+#
+# Customized by Jesus Cuenca (2006-2012)
+# Version 1.1
+#	- the snapshots are performed with rsync --backup, so now this script only
+#	renames the directories rsync creates (rotate snapshots)
+#	The original script made use of hard links to create a copy of all the files,
+#	without using more disk space - but this trick only worked when everything
+#	belonged to the same filesystem, and it made harder to delete original files
+#	(since the space only was freed when all the hard links were deleted too)
+#
+# Version 1.0
+# 	- keep only one copy of vmdk files
+
+print_syntax(){
+	echo Usage: $1 source copies
+	echo
+	echo Parameters
+	echo \ source: periodic directory to rotate \(absolute path\)
+	echo \ copies: numbers of rotating copies to keep
+	echo \ example: $1 /home/jdoe/daily 5
+}
+
+unset PATH	# suggestion from H. Milz: avoid accidental use of $PATH
+
+ERR_WRONG_SYNTAX=9
+ERR_NO_SNAPSHOT=1
+ERR_UID_NOT_ROOT=10
+ERR_EMPTY_SNAPSHOT=2
+RETURN_OK=0
+
+# ------------- system commands used by this script --------------------
+ID=/usr/bin/id;
+ECHO=/bin/echo;
+EXPR=/usr/bin/expr
+
+LS=/bin/ls
+WC=/usr/bin/wc
+RM=/bin/rm
+MV=/bin/mv
+CP=/bin/cp
+MKDIR=/bin/mkdir
+TOUCH=/bin/touch
+BASENAME=/usr/bin/basename
+FIND=/usr/bin/find
+DIRNAME=/usr/bin/dirname
+
+RSYNC=/usr/bin/rsync;
+
+if (( `$ID -u` != 0 )); then
+    $ECHO "You must run this script as root"
+    exit ${ERR_UID_NOT_ROOT}
+fi
+
+if [ $# -lt 2 ]; then
+    echo Wrong number of parameters
+    print_syntax $0
+    exit ${ERR_WRONG_SYNTAX}
+fi
+
+SOURCE=$1
+NUMBER_OF_COPIES=$2
+
+# the index goes from 1 to NUMBER_OF_COPIES, 1 being the newest snapshot,
+# and NUMBER_OF_COPIES the oldest
+
+OLDEST=${NUMBER_OF_COPIES}
+LAST_SNAPSHOT=$( ${DIRNAME} "${SOURCE}")/snapshot
+
+if [ ! -d $LAST_SNAPSHOT ]; then
+    exit ${ERR_NO_SNAPSHOT}
+fi
+
+if [ $( ${LS} -A ${LAST_SNAPSHOT} | ${WC} -l) -eq 0 ]; then
+    exit ${ERR_EMPTY_SNAPSHOT}
+fi
+
+if [ -d $SOURCE.$OLDEST ]; then			
+    $RM -rf "${SOURCE}.${OLDEST}"
+fi 
+
+# Shift the middle snapshots(s) back by one, if they exist
+K=${OLDEST}
+I=$(( ${K} -1 ))
+while [ $I -gt 0 ]; do
+    if [ -d $SOURCE.$I ]; then
+	$MV "${SOURCE}.${I}" "${SOURCE}.${K}" 
+    fi
+    K=${I}
+    I=$(( ${I} - 1 ))
+done
+
+
+$MV $LAST_SNAPSHOT $SOURCE.1
+
+$MKDIR $LAST_SNAPSHOT
+
+exit ${RETURN_OK}

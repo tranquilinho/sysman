@@ -1,0 +1,11 @@
+#!/bin/bash
+
+if [ $# -ne 1 ];then
+    echo "Syntax: $0 lv"
+    echo "Example: $0 /nas/backup/joe/pp"
+    exit 1
+fi
+
+readonly RSC=$1
+
+df -h ${RSC} | awk '{print $2}' | tail -1

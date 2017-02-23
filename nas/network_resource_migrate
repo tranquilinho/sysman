@@ -1,0 +1,137 @@
+#!/bin/bash
+
+[ -z "${sysman_scripts_dir}" ] && readonly sysman_scripts_dir="$(dirname $0)/../.."
+[ -z "${SYSMAN_LOGDIR}" ] && readonly SYSMAN_LOGDIR=/var/log
+readonly log_file=${SYSMAN_LOGDIR}/nas.log
+readonly log_facility="nas"
+
+. ${sysman_scripts_dir}/misc.sh
+
+
+print_usage(){
+    echo "Replicate once a network resource from one server to another. Run from admin server"
+    echo "Syntax: $0 -f from_server:from_tags -t to_server [-p to_path -v to_vg -l to_lv -R -C]"
+    echo "-R skips the rsync copy, -C skips netrsc creation in to_server, -s take into account real disk use (instead of netrsc size)"
+    exit 1
+}
+
+skip_rsync=0
+skip_creation=0
+smallest_possible=0
+
+if [ "$#" -gt 0 ]; then
+    while getopts "f:t:p:v:l:RCs" options; do
+	case "${options}" in
+	    v)
+		readonly to_vg=${OPTARG}
+		;;
+	    l)
+		readonly to_lv=${OPTARG}
+		;;
+	    s)
+		smallest_possible=1
+		;;
+
+	    p)
+		readonly to_path=${OPTARG}
+		;;
+	    f)
+		readonly from=${OPTARG}
+		readonly host=$( expr match "${from}"   "\(.*\):.*" )
+		readonly tags_csv=$( expr match "${from}"   ".*:\(.*\)" )
+		;;
+	    t)
+		readonly to_server=${OPTARG}
+		;;
+	    R)
+		skip_rsync=1
+		;;
+	    C)
+		skip_creation=1
+		;;
+
+            *)
+		echo "Unknow option" 1>&2 
+		print_usage
+		;;
+	esac
+    done
+    shift $((OPTIND-1))
+else
+    print_usage
+fi
+
+if [ -z "${host}" -o -z "${to_server}" ]; then
+    print_usage
+fi
+
+declare -a tags
+tags=($( echo ${tags_csv} | tr "," "\n"))
+# the volume might not be mounted... search directly in lvs
+# $@ keeps the spaces in pattern
+for pattern in "${tags[@]}"; do
+	cmd_chain="${cmd_chain} | grep \"${pattern}\""
+done
+cmd_chain="lvs ${cmd_chain}"
+cmd_chain_output=($( ssh ${host} ${cmd_chain} | tail -1  ))
+
+[ ${#cmd_chain_output[@]} -ne 4 ] && log "${critical} Source volume not unique..." && exit 2
+
+readonly lv_path="/dev/mapper/${cmd_chain_output[1]}-${cmd_chain_output[0]//-/--}"
+
+lv_name=${cmd_chain_output[0]}
+if [ -z "${to_lv}" ]; then
+    to_lv=${lv_name}
+fi
+
+if [ ${smallest_possible} -eq 0 ]; then
+    size=$( ssh ${host} lvs | grep "${lv_name} " | awk '{print $4}')
+else
+    # mapper syntax...
+    size=$( ssh ${host} df -h | grep ${lv_path} | awk '{print $3}')
+fi
+
+[ -z "${size}" ] && log "${critical} unknown netrsc size" && exit 3
+
+if [ -z "${to_vg}"  ]; then
+    to_vg=$(ssh ${to_server} ${remote_nas_scripts_dir}/netrsc/suggest_vg.sh ${size} | head -1)
+fi
+
+mount_point=$(ssh ${host} ${remote_nas_scripts_dir}/netrsc/mountpoint_of_lv.sh ${lv_path})
+
+[ -z "${mount_point}" ] && log "${critical} Mountpoint not found" && exit 2
+
+if [ -z "${to_path}" ]; then
+    to_mount_point="${mount_point}/"
+else
+    to_mount_point=${to_path}
+fi
+
+# if the mountpoint changes, the target:/etc/exports should reflect it...
+ssh ${host} grep ${mount_point} /etc/exports | sed "s,${mount_point},${to_mount_point}" | ssh ${to_server} "cat -  >> /etc/exports"
+
+create_netrsc ${to_server} ${to_vg} ${to_lv} ${size} ${to_mount_point}
+err_code=$?
+[ ${err_code} -ne 0 -a ${skip_creation} -eq 0 ] && exit ${err_code}
+
+if [ ${skip_rsync} -eq 0 ]; then
+    rsync_summary="rsync ${host}:${mount_point} -> ${to_server}:${to_mount_point}"
+    readonly rsync_log_file=${scripts_base}/log/$(date +%s).log
+    log "${info} ${rsync_summary} started. see ${rsync_log_file}"
+    ssh ${host} "rsync -av --progress ${mount_point}/ ${to_server}:${to_mount_point}" | logalize ${rsync_log_file}
+    log "${info} ${rsync_summary} finished"
+fi
+
+# !!!! check if it works properly in local mode
+# if [ ${in_local} -eq 1 ]; then
+#     lv_path=$(grep $OLDNETPATH /etc/fstab | awk '{print $1}')
+#     BASElv_path=$(dirname ${lv_path})
+#     NEWLVPATH="${BASELVPATH}/${NEWLVNAME}"
+#     ESCOLDLVPATH=$(echo $LVPATH | sed 's_/_\\\/_g')
+#     ESCNEWLVPATH=$(echo $NEWLVPATH | sed 's_/_\\\/_g')
+#     
+#     umount ${to_mount_point}
+#     mount ${mount_point}
+# fi
+
+echo "Remember to update backup_hosts and remove old volume if needed"

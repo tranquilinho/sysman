@@ -1,0 +1,22 @@
+#!/bin/bash
+
+[ -z "${sysman_scripts_dir}" ] && readonly sysman_scripts_dir="$(dirname $0)/../.."
+
+nagios=0
+if [ $# -eq 1 ]; then
+  if [ $1 == "-nagios" ]; then
+    nagios=1
+  fi
+fi
+
+cd ${SYSMAN_ETC}/vmservice_backup/
+for profile in $(ls | grep -v excludes); do
+    if [ ${nagios} -eq 1 ]; then
+	${sysman_scripts_dir}/nas/vmservice_backup_check ${profile} | grep vm | grep 'PROBLEM'
+    else
+	echo "** $PROFILE **************************"
+	${sysman_scripts_dir}/nas/vmservice_backup_check ${profile}
+    fi
+done
+
+cd - > /dev/null

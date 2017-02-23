@@ -1,0 +1,4 @@
+#!/bin/bash
+
+# !!!! Include parameters
+echo "# source dest replica_freq(hours) snapshot_freq(days)" >> $1

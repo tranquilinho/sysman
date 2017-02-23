@@ -1,0 +1,145 @@
+#!/bin/bash
+
+# !!!! see vmservice_backup_info
+# more than ANCIENT days without backup is a bad signal...
+readonly ANCIENT=10
+
+readonly BACKUP_CONF_DIR=/etc/san/rsync_backup/conf/rsyncd.confs
+readonly LAST_BACKUP_FILE=".last_backup_date"
+
+function date_diff_approx(){
+    # IFS='-' read -ra FIELDS <<< "$1"
+    # M1=${FIELDS[0]}; D1=${FIELDS[1]}
+    month1=$( expr match "$1" "\(..\)-..")
+    day1=$( expr match "$1" "..-\(..\)")
+    month2=$( expr match "$2" "\(..\)-..")
+    day2=$( expr match "$2" "..-\(..\)")
+
+    mdiff=$(( ${month2} - ${month1} ))
+
+    if [ ${mdiff} -lt 0 ]; then
+        mdiff=$(( 11 + ${mdiff} ))
+    elif [ ${mdiff} -gt 0 ]; then
+	mdiff=$(( ${mdiff} -1 ))
+    fi
+
+    ddiff=$(( ${day2} - ${day1} ))
+    if [ ${ddiff} -lt 0 ]; then
+        ddiff=$(( 30 + ${ddiff} ))
+    fi
+
+    total=$(( ${mdiff} * 30 + ${ddiff} ))
+    echo ${total}
+}
+
+# !!!! use cecho from misc.sh
+
+readonly black='\E[30;47m'
+readonly red='\E[31;47m'
+readonly green='\E[32;47m'
+readonly yellow='\E[33;47m'
+readonly blue='\E[34;47m'
+readonly magenta='\E[35;47m'
+readonly cyan='\E[36;47m'
+readonly white='\E[37;47m'
+
+
+function cecho(){
+	message=$1
+	color=${2:-$black} 
+	echo -ne "$color"
+	echo -n "$message"
+	#  tput sgr0
+	echo -e "\E[0m"
+}
+
+function report(){
+    local size=$1
+    local date=$2
+    local age=$3
+    local path="$4"
+    local tag=$5
+    echo "( ${size} ${date} ${age} '${path}' ${tag})"
+}
+
+readonly TODAY=`date +%m-%d`
+
+if [ $# -lt 1 ]; then
+    echo $0 [-v] module
+    echo Shows info of a backup module
+    exit 1
+fi
+
+verbose=0
+
+if [ $1 == "-v" ];then
+    verbose=1
+    shift
+fi
+
+module=$1
+backup_conf=$( grep -l ${module} ${BACKUP_CONF_DIR}/* )
+line=$( grep path ${backup_conf} | grep -v backup_path )
+backup_paths=$( expr match "${line}" ".*=\(.*\)" )
+line=$( grep key_files ${backup_conf} )
+key_files=$( expr match "${line}" ".*=\(.*\)" )
+
+LS_OPTIONS="-ltra --time-style=+%s"
+
+for backup_path in ${backup_paths} ; do
+    last_backup_file_missing=""
+
+    if [ ! -d ${backup_path} ]; then
+	if [ ${verbose} -eq 1 ]; then 
+	    echo Path ${backup_path} does not exist
+	    exit 2
+	else
+	    continue
+	fi
+    fi
+
+    IFS=' ' read -ra FIELDS <<< "`df -Ph  ${backup_path} | tail -1`"
+    disk_used=${FIELDS[2]}
+    if [ ${verbose} -eq 1 ]; then
+	echo ${backup_path}. Space used ${disk_used}
+	echo Newest files:
+		# Exhaustive search
+    	ls ${LS_OPTIONS} -R ${backup_path} | tail -3 
+    else
+		# Search only in the first 3 levels of the directory tree
+	newest_dates=($( find ${backup_path} -maxdepth 3 -type d -print0 | xargs -0 ls ${LS_OPTIONS} | grep -v "${LAST_BACKUP_FILE}" | sort -rn -k 6 | head -1 | gawk '{print strftime("%m-%d",$6)}' ))
+	newest_date=${newest_dates[0]}
+	last_backup_date=$( ls ${LS_OPTIONS} ${backup_path}/*/${LAST_BACKUP_FILE} 2> /dev/null | gawk '{print strftime("%m-%d",$6)}' )
+
+	if [ -n "${last_backup_date}" ]; then
+	    date_to_compare=${last_backup_date}
+	else
+	    date_to_compare=${newest_date}
+	    last_backup_file_missing="${LAST_BACKUP_FILE}:missing"
+	fi
+
+	age=$( date_diff_approx ${date_to_compare} ${TODAY} )
+	# msg="${disk_used} ${newest_date} ${age} '${backup_path}' ${last_backup_file_missing}"
+
+	if [ ${age} -gt ${ANCIENT} ]; then
+	    tag="OLD"
+	else
+	    tag="OK"
+	fi
+	# echo "(${msg} ${tag})"
+	report ${disk_used} ${newest_date} ${age} "${backup_path}" "${last_backup_file_missing},${tag}"
+    fi
+
+    # Paths to key files are relative to backup path
+    for key_file in "${key_files}" ; do
+	if [ ${#key_file} -gt 1 ]; then
+	    file=`echo "${key_file}" | sed 's,\\\\,,g'`
+	    file_attribs=($( ls ${LS_OPTIONS} -h "${backup_path}/${file}" | gawk '{print $5 " " strftime("%m-%d",$6)}' ))
+	    size=${file_attribs[0]}
+	    date=${file_attribs[1]}
+	    age=$( date_diff_approx ${date} ${TODAY})
+	    # echo "( ${size} ${date} ${age} ${file} )"
+	    report ${size} ${date} ${age} "${file}" "KEY"
+	fi
+    done
+done

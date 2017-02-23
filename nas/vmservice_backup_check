@@ -1,0 +1,47 @@
+#!/bin/bash
+
+# !!!! make configurable
+readonly remote_nas_path=/etc/sysman/nas
+
+if [ $# -ne 1 ]; then
+    echo "$0 backup_profile"
+    echo "Shows info of all the resources of a vmservicebackup"
+    exit 1
+fi
+
+readonly profile="${SYSMAN_ETC}/vmservice_backup/$1"
+readonly today=$(date +%m-%d)
+hosts=()
+declare -A backup_paths
+declare -A roles
+
+# Pipes create subshells, so << is needed in order to use HOSTS outside the while
+while read line; do
+    # IFS=':' read -ra FIELDS <<< "$LINE"
+    # ROLE=${FIELDS[0]}
+    param_name=$( expr match "${line}" "\([^=]*\)=.*" ) 
+
+    case ${param_name} in
+	data)
+	    role=${param_name}
+            backup_path=$(expr match ${line} "data=\(.*\)")
+	    backup_paths[${backup_path}]=${role}
+	    # echo ${BACKUP_PATHS[@]}
+	    ;;
+	frontend|mirror|backup|replicas)
+	  role=${param_name}
+	  host=$(expr match ${line} "[^=]*=\([^:]*\):.*")
+	  backup_path=$(expr match ${line} "[^=]*=[^:]*:[^:]*:[^:]*:\([^:]*\).*")
+	  if [ -n "${backup_path}" ]; then
+	      backup_paths[${backup_path}]=${host}
+	  fi
+	  hosts+=(${host})
+	  roles[$host]=${role}
+	  ;;
+    esac
+done < <(cat ${profile})
+
+for host in ${hosts[@]}; do
+    echo "== ${host} ${roles[$host]} =="
+    ssh ${host} ${remote_nas_path}/vmservice_backup_info ${!backup_paths[@]}
+done
