@@ -3,7 +3,7 @@
 readonly syntax_error=1
 
 print_usage(){
-    echo "Change the names \(volume and mount path\) of a local netrsc"
+    echo "Change the names (volume and mount path) of a local netrsc"
     echo "Syntax:"
     echo "   $0 -f old_path -t new_path -l new_lv_name"
     echo "Example:"
@@ -12,7 +12,7 @@ print_usage(){
 }
 
 
-if [ "$#" -gt 0 ]; then
+if [ "$#" -ge 1 ]; then
     while getopts "f:t:l:h" options; do
 	case "${options}" in
 	    l)
@@ -33,7 +33,6 @@ if [ "$#" -gt 0 ]; then
 		;;
 	esac
     done
-    shift $((OPTIND-1))
 else
     print_usage
 fi
