@@ -19,7 +19,7 @@ print_usage(){
 smallest_possible=0
 
 if [ "$#" -gt 0 ]; then
-    while getopts "f:v:s" options; do
+    while getopts "f:v:sh" options; do
 	case "${options}" in
 	    v)
 		readonly to_vg=${OPTARG}
@@ -30,6 +30,9 @@ if [ "$#" -gt 0 ]; then
 	    s)
 		smallest_possible=1
 		;;
+	    h)
+		print_usage
+		;;   
             *)
 		echo "Unknow option" 1>&2 
 		print_usage

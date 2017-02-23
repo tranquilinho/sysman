@@ -1,6 +1,6 @@
 #!/bin/bash
 
-if [ $# -ne 1 ];then
+if [ $# -ne 1 -o "$1" == "-h" ];then
     echo "Syntax: $0 lv"
     echo "Example: $0 /nas/backup/joe/pp"
     exit 1

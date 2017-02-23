@@ -5,15 +5,34 @@
 [ -z "${sysman_scripts_dir}" ] && readonly sysman_scripts_dir=$(dirname $0)/..
 readonly nas_scripts_dir=${sysman_scripts_dir}/nas
 
+readonly syntax_error=1
 
+print_usage(){
+    echo "Split a netrsc in two"
+    echo "Syntax:"
+    echo "   $0 -p netrsc_path"
+    echo "Example:"
+    echo "   $0 -p /nas/backup/joe/bigdir" 
+    exit ${syntax_error}  
+}
 
-if [ $# -ne 1 ]; then
-    echo "Syntax: $0 dir_to_extract"
-    echo "Example: $0 /nas/backup/joe/bigdir" 
-    exit 1
+if [ "$#" -ge 1 ]; then
+    while getopts "p:h" options; do
+	case "${options}" in
+	    p)
+		readonly dir_to_extract="${OPTARG}"
+		;;
+	    h)
+		print_usage
+		;;
+	esac
+    done
+else
+    print_usage
 fi
 
-readonly dir_to_extract=$1
+[ -z "${dir_to_extract}" ] && print_usage
+
 readonly size=$(du -hs ${dir_to_extract} | awk '{print $1}')
 readonly vg=$(${nas_scripts_dir}/suggest_vg ${size} | head -1)
 readonly parent_lv_mapper=$(df -P ${dir_to_extract | tail -1 | awk '{print $1}')

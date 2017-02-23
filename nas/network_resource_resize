@@ -5,19 +5,41 @@
 readonly log_file=${SYSMAN_LOGDIR}/nas.log
 readonly log_facility="nas"
 
-# !!!! use named params
+readonly syntax_error=1
 
-if [ $# -lt 2 ]; then
-	echo "Syntax: $0 size volume_pattern_list"
-	echo "Example: $0 +10G backup john server1"
-	echo "Example: $0 60G work joe pc2"
-	exit 1
+print_usage(){
+    echo "Change the size of a local netrsc"
+    echo "Syntax:"
+    echo "   $0 -s size -p tag_list "
+    echo "Example:"
+    echo "   $0 -s +10G -p backup,john,server1"
+    echo "   $0 -s 60G -p work,joe,pc2"
+    echo "   $0 -s -40G -p work,sue,big_data"
+    exit ${syntax_error}  
+}
+
+
+if [ "$#" -ge 1 ]; then
+    while getopts "s:p:h" options; do
+	case "${options}" in
+	    s)
+		readonly size="${OPTARG}"
+		;;
+	    p)
+		readonly tags="${OPTARG/,/ }"
+		;;
+	    h)
+		print_usage
+		;;
+	esac
+    done
+else
+    print_usage
 fi
 
-readonly size=$1
-shift
+[ -z "${size}" -o -z "${tags}" ] && print_usage
 
-lvpath=$(${sysman_scripts_dir}/nas/find_single_volume "$@")
+lvpath=$(${sysman_scripts_dir}/nas/find_single_volume ${tags})
 if [ $? -ne 0 ]; then
     exit $?
 fi
