@@ -1,0 +1,382 @@
+#!/bin/bash
+VERSION=2.1
+# 
+# CREDITS
+# Original from: http://www.mikerubel.org/computers/rsync_snapshots/
+# Customized by Jesus Cuenca
+#
+# DESCRIPTION
+# Backup a directory using rsync 
+#
+# CHANGES
+#
+#    Release 2.1 
+#       - allow specific options like -S for some agent
+#       - removed old pre 1.4 stuff
+#    Release 2.0.1
+#       - logging improved
+#    Release 2.0
+#       - restrict dependency on a single server for installation
+#       - get updates from any of the update_servers
+#       - backup to different servers, keeping the configuration in the backup servers (backup_hosts)
+#       - simplify server keys management (known_hosts)
+#       - echo_log
+#
+#    Release 1.6
+#	- merge win / linux / mac versions in a single script
+#	(pending:
+#		- automatic renaming from rsync_backup_OS to rsync_backup)
+#		- integrate back the rsync password feature
+#
+#    Release 1.5.5
+#	- snapshots scheduling (frecuency as a parameter in backup file)
+#
+#    Release 1.5
+#	- use --backup as an alternative to snapshots
+#
+#    Release 1.4
+#	- autoupdate from update server, both the program code and the backup configuration. Updates must be downloaded
+#   without ssh, to be able to download updates even if there are key problems
+#	- new configuration scheme (3 files)
+#	- use server side excludes
+#	- don't write to stdout since it confuses cron
+#	- configurable cwd RSB_CWD (for different setups, i.e. backups of usb drives)
+#	- both local and remote logging of the same messages
+#
+# TODO
+#	- autoretry mechanism (in case a schedule cannot be met)
+#	- mechanism to preserve autoupdates in case of script corruption
+#	- add network connection event as a trigger to start the script (for road warriors)
+#	- learn mode: measure computer's power on times and then estimate the best moment to perform the backup
+#	- improve code style & legibility
+#
+# CONFIG FILES (for this script)
+#   backup.cfg -- module + sources
+#   server_key -- backup server ssh host key
+#   cron -- when to do backups (cron.d format:
+#           minute hour day_of_month month day_of_week root script
+
+# Global variables
+
+# If SKIP_BACKUP equals 1, the backup of the data is not performed
+SKIP_BACKUP=0
+
+
+if [ "a$RSB_CWD" == "a" ]; then
+        WORKING_DIR=/etc/cron_scripts
+else
+        WORKING_DIR=$RSB_CWD
+fi
+
+UPDATE_SERVERS_FILE=$WORKING_DIR/update_servers
+
+# Rsync auth -> moved to backup.cfg
+# RUSER=$WORKING_DIR/ruser
+PASS=$WORKING_DIR/pass
+
+
+# For what OS this version of the script is intended. Supported platforms: linux,osx,win
+if [ -f /bin/uname ]; then
+        TARGET_OS=`/bin/uname`
+elif [ -f /usr/bin/uname ]; then
+        TARGET_OS=`/usr/bin/uname`
+fi
+
+
+cd $WORKING_DIR
+
+# `$BASENAME $0`
+UPDATE_NAME=rsync_backup_linux2
+
+if [ -f $PASS ]; then
+	export RSYNC_PASSWORD=`$CAT $PASS`
+fi
+
+# The name of the file that will be downloaded from the server to update the current version of the program
+readonly SYSCONFIG=sysconfig
+
+# The name of the file with the backup server public key
+SERVER_KEY=server_key
+
+KNOWN_HOSTS=$HOME/.ssh/known_hosts
+
+LOG_FILE=/var/log/rsync_backup.log
+
+# This file contains the date and time of last check for updates, in seconds since 1970
+LAST_UPDATE_CHECK_FILE=.last_update_check
+
+# How frequently to check for updates, in seconds. 86400 seconds == 1 day
+UPDATE_CHECK_PERIOD=86400
+
+# This file stores what it is copied and where.
+# File syntax: 4 bash arrays: modules, snapshot_freq, backup_paths and backup_host
+# snapshot_cycle -> how often to make an snapshot (0 = don't make snapshot, 1 = every day, 2 = every 2 days...)
+readonly BACKUP_CONFIG=backup.cfg
+
+# EXCLUDES=rsync_excludes
+
+
+BACKUP_HOSTS=backup-hosts
+INITIAL_UPDATE_SERVER=boole.cnb.csic.es
+# Server name, long and short
+SERVER=disco.cnb.csic.es
+SERVER_SHORT=disco
+
+
+# The name of the rsync module in the server that collects the updates
+UPDATE_MODULE=updates
+
+# returns time (in seconds) since last modification to file $1
+check_last(){
+        CURRENT_DATE=$(date +%s)
+
+        if [ -f $1 ]; then
+            LAST_CHECK=$(cat $1)
+        else
+            # If there were not any check, force it
+	    LAST_CHECK=$(( ${CURRENT_DATE} - ${UPDATE_CHECK_PERIOD}))
+        fi
+
+        TIME_SINCE_LAST_CHECK=$(( $CURRENT_DATE - $LAST_CHECK))
+	echo $TIME_SINCE_LAST_CHECK
+	# return $TIME_SINCE_LAST_CHECK
+}
+
+get_update_servers(){
+	FILE_NAME=$(basename $UPDATE_SERVERS_FILE)
+	if [ ! -f $UPDATE_SERVERS_FILE ]; then
+	    rsync -a $INITIAL_UPDATE_SERVER::$UPDATE_MODULE/$FILE_NAME .  >> $LOG_FILE 2>&1
+	fi
+	get_from_update_servers $FILE_NAME
+		
+}
+
+
+get_from_update_servers(){
+	FILE=$1
+	DEST="."
+	if [ $# -eq 2 ]
+	then
+		DEST=$2
+	fi
+
+	if [ ! -f $UPDATE_SERVERS_FILE ]
+	then
+		echo_log Missing $UPDATE_SERVERS_FILE
+		return
+	fi
+
+	for S in `$CAT  $UPDATE_SERVERS_FILE`
+	do
+		rsync -a --timeout 10 $S::$UPDATE_MODULE/$FILE $DEST  >> $LOG_FILE 2>&1
+		if [ $? -eq 0 ]
+		then
+			return 0
+		fi
+		echo_log Could not get $FILE from server $S
+	done
+}
+
+update(){
+    # by now, do nothing
+    return 0
+	# perform all the self-update functions
+	# 1) download latest server public key if newer
+	# 2) download latest version of the script if newer
+	
+	UPDATED=0
+	ERROR=0
+	
+	# check updates once in a UPDATE_CHECK_PERIOD 
+	LAST_CHECK=`check_last $LAST_UPDATE_CHECK_FILE`
+
+	if [ $LAST_CHECK -ge $UPDATE_CHECK_PERIOD ]
+	then
+		echo_log Checking for updates... 
+		get_update_servers
+		update_server_key
+		ERROR=`$EXPR $ERROR + $?`
+		
+		LAST_CRC=($($MD5SUM $UPDATE_NAME))
+		get_from_update_servers $UPDATE_NAME $UPDATE_NAME.new
+		CRC=($($MD5SUM $UPDATE_NAME.new))
+		if [ ${LAST_CRC[0]} != ${CRC[0]} ]
+		 then
+		 		echo_log Updating...
+		 		./$UPDATE_NAME.new replace_old &
+		 		UPDATED=1
+		 fi
+		 
+		 if [ $ERROR -eq 0 ]
+		 then 
+		 		# If there were no problems, register this update's date
+		 	 	echo $(date +%s) > $LAST_UPDATE_CHECK_FILE
+		 fi
+		 echo_log Done.
+	fi
+	
+	if [ -f $SYSCONFIG ]
+	then
+                # Update config file
+                SYS_CONFIG=`$CAT $SYSCONFIG`
+		get_from_update_servers configs/$SYS_CONFIG/
+
+                # Update cron, including the local contents, without extra crontab comments. When rsync fails, cron grows every time making crontab huge
+		$CRONTAB -l | $SED '/rsync_backup/d' | $CAT - cron | $CRONTAB -
+	fi	
+	return $UPDATED
+}
+
+
+# Be careful with this function, since it's called from old version to new version, and it may break
+# the update process
+# Keep a copy of the previous script
+replace_old(){
+	SCRIPT=${UPDATE_NAME/.new/}
+	# Give time to the old program to exit before we replace it
+	$SLEEP 2
+	$CP $SCRIPT $SCRIPT.old
+	$MV -f $UPDATE_NAME $SCRIPT
+	echo Updated.
+}
+
+
+update_server_key(){
+	# The SSH host key of the server may change with time. When the key changes, all the clients refuse to connect
+	# to prevent a 'man in the middle' attack. So, it's neccesary to replace the old keys in this cases.
+		# perform all the self-update functions
+	# 1) download latest version if newer
+	
+	KNOWN_HOSTS_DIR=$(dirname $KNOWN_HOSTS)
+	if [ ! -d $KNOWN_HOSTS_DIR ]
+	then
+		mkdir -p $KNOWN_HOSTS_DIR
+	fi
+	
+	# rsync compares current version and remote version by CRC ( -c option)
+	# for fault-tolerant version, download always and compare checksums
+	LAST_CRC=($(md5sum $SERVER_KEY))
+	get_from_update_servers $SERVER_KEY
+	CRC=($(md5sum $SERVER_KEY))
+	if [ ${LAST_CRC[0]} != ${CRC[0]} ]
+	then		
+		echo Updating server key...
+	 
+		cat $SERVER_KEY | while read H O
+		do
+			keygen -R $H
+		done
+	 	cat $SERVER_KEY >> $KNOWN_HOSTS
+	fi 
+}
+
+
+check_configuration_files(){
+	# Check that configuration files exist
+	if [ ! -f ${BACKUP_CONFIG} ]; then
+	    if [ -f ${SYSCONFIG} ]; then
+		echo Will import config from server...
+	    else
+		echo ${SYSCONFIG} is missing
+		echo ${BACKUP_CONFIG} is missing
+		exit 1
+	    fi
+	fi
+}
+
+# do a backup of a single module
+# $1 -> module index
+backup(){
+    # REMOTE_MODULE -> module
+    # SNAP_FREQ -> snapshot_freq
+    # WHAT -> backup_paths
+    # SERVER -> backup_host
+    local i=$1
+    local remote_user=${remote_user[i]:-root}
+
+
+    echo_log $(date +"%F %T") - Backing up ${backup_paths[i]} to ${module[i]}\(${backup_host[i]}\)... 
+    # cygwin cron is affected by the output of the job, so the command must be completely quiet
+    # use -L to follow symlinks 
+    # server:module -> ssh ; server::module -> rsync . So, with :: the -e option is needed
+    local SNAP_PARAMS=""
+    local DOIN_SNAPSHOT="no"
+    if [ ${snapshot_freq[i]} -gt 0 ]; then
+	local LAST_SNAPSHOT_FILE=$(echo .${module[i]}.last_snapshot | sed 's,/,_,g')
+	local SNAP_FREQ_SECONDS=$(( ${snapshot_freq[i]} * 86400 ))
+	local LAST_SNAP_SEC=$(check_last ${LAST_SNAPSHOT_FILE})
+	if [ ${LAST_SNAP_SEC} -ge ${SNAP_FREQ_SECONDS} ]; then
+	    DOIN_SNAPSHOT="yes"
+	    SNAP_PARAMS="--backup --backup-dir=/snapshot"
+	    echo $(date +%s) > ${LAST_SNAPSHOT_FILE}
+	fi
+    fi
+
+    echo_log Snapshot: $DOIN_SNAPSHOT \( frequency: ${snapshot_freq} \) 
+	    
+    if [ $SKIP_BACKUP -eq 0 ];	then
+       # In Unix it's important to keep ownership & permissions, so it's better -a than -rt
+	# --exclude params passed as options[i] are ignored when using plain rsync (without the eval)
+	# !!!! maybe there is a better way to ensure the rsync command we build is run as we intend to?
+	eval "rsync -avz -e ssh --delete --delete-excluded ${SNAP_PARAMS} ${options[i]} ${backup_paths[i]} ${remote_user}@${backup_host[i]}::${modules[i]} &> /tmp/rsync_backup.log.tmp"
+	grep -v non-regular /tmp/rsync_backup.log.tmp >> ${LOG_FILE}
+    fi
+
+    if [ -f /tmp/rsync_backup.log.tmp ]; then
+	rm /tmp/rsync_backup.log.tmp
+    fi
+
+    echo_log Finished $(date)
+    echo_log
+}
+
+# Copy the local rsync log file to the server in the first module that appears
+# in the backup config file
+sync_log(){
+	rsync -a $LOG_FILE ${remote_user}@${backup_host}::${log_module}
+}
+
+echo_log(){
+	echo $* >> $LOG_FILE
+}
+
+syntax(){
+	echo Syntax: $0 [COMMAND]
+	echo COMMAND can be: replace_old
+	echo If no command is specified, it does normal operations \(self-update / backup\)
+
+}
+
+############## Main
+
+echo_log $0 version $VERSION started. $(date). 
+
+# Process parameters - see syntax
+if [ $# -eq 1 ]; then
+    # Be careful with this parameter, renaming or modifying it may break the update process
+    if [ $1 == replace_old ]; then
+	echo Replacing old version...
+	replace_old
+	exit 0
+    fi
+elif [ $# -gt 1 ]; then
+    echo Wrong number of parameters
+    syntax
+    exit 1
+fi
+
+check_configuration_files
+. ${BACKUP_CONFIG}
+
+update
+
+if [ $? -eq 0 ]; then
+    # The script was not updated
+    module_index=0
+    for m in ${modules[@]}; do
+	backup ${module_index}
+	(( module_index = module_index + 1 ))
+    done
+    sync_log
+fi
+

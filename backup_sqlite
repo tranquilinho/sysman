@@ -1,0 +1,37 @@
+#!/bin/bash
+
+# !!!! Integrate features from backup_postgres
+# !!!! Test latest changes
+
+print_usage(){
+    echo "Backup a SQLite DB"
+    echo "Syntax: $0 -d db -b backup_dir"
+    echo "Example: "
+    echo "$0 -d /db/classes.db -b /backup/project1"
+    exit 1
+}
+
+if [ "$#" -eq 2 ]; then
+    while getopts "d:b:" options; do
+        case "${options}" in
+	    d)
+		readonly db=${OPTARG}
+		;;
+	    b)
+		readonly backup_dir=${OPTARG}
+		;;
+            *)
+                echo "Unknow option" 1>&2 
+                print_usage
+                ;;
+        esac
+    done
+else
+    print_usage
+fi
+
+
+# cd ${backup_dir}
+readonly backup_file=${db##.*}.sql
+echo .dump | sqlite3 ${db} > ${backup_dir}/${backup_file}
+git commit -a -m "backup_sqlite/${backup_file}"

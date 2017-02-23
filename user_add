@@ -1,0 +1,99 @@
+#!/bin/bash
+
+# @ act
+
+log_facility="accounting"
+
+# another way to get the base dir
+#="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+[ -z "${sysman_scripts_dir}" ] && readonly sysman_scripts_dir=$(dirname $0)
+[ -z "${SYSMAN_ETC}" ] && readonly SYSMAN_ETC=/etc/sysman
+[ -z "${SYSMAN_LOGDIR}" ] && readonly SYSMAN_LOGDIR=/var/log
+readonly log_file=${SYSMAN_LOGDIR}/sysman.log
+
+. ${sysman_scripts_dir}/misc.sh
+
+# 64MB
+readonly default_quota=64000
+
+[ -n "${SM_USER}" ] && readonly SSH_USER="${SM_USER}@"
+
+print_usage(){
+    echo "Create a user account in a remote server"
+    echo "Syntax: $0 -H remote_host -u username [-d home_base_dir -g groupname -U uid -G gid -q quota_in_GB -e expiration_days]"
+    echo "Example: "
+    echo "$0 -H bigserver -u joe -d /mnt/devel -g devel -U 1234 -G 56 -q 320 -e 30"
+    exit 1
+}
+
+
+if [ "$#" -ge 4 ]; then
+    while getopts "H:u:g:U:G:s:q:d:e:" options; do
+        case "${options}" in
+            H)
+                readonly host=${OPTARG}
+                ;;
+            u)
+                readonly user=${OPTARG}
+                ;;
+            g)
+                readonly group=${OPTARG}
+                ;;
+            U)
+                readonly uid=${OPTARG}
+                ;;
+	    G)
+		readonly gid=${OPTARG}
+		;;
+	    s)
+		readonly size=${OPTARG}
+		;;
+	    q)
+		readonly quota_in_GB=${OPTARG}
+		readonly quota=$(( quota_in_GB * 1024 * 1024 ))
+		;;
+	    d)
+		readonly home_base=${OPTARG}
+		;;
+	    e)
+		readonly expiration_days=${OPTARG}
+		;;
+            *)
+                echo "Unknow option" 1>&2 
+                print_usage
+                ;;
+        esac
+    done
+else
+    print_usage
+fi
+
+[ -z "${group}" ] && readonly group="bioinfo"
+
+[ -z "${user}" ] || [ -z "${host}" ] && print_usage
+
+search_user_db
+search_group_db
+
+[ -z "${uid}" ] || [ -z "${gid}" ] && echo "UID / GID not found" && exit 2
+
+# echo ${uid} ${gid}
+
+echo "Remote group: "
+add_new_group ${host} ${group} ${gid}
+
+# !!!! .ssh/authorized_keys is created with root ownership?
+
+readonly create_home="-m"
+[ ${group} == bioinfo ] && duration=15552000
+[ -n "${expiration_days}" ] && duration=$(( expiration_days * 86400))
+add_new_user ${host} || exit 2
+
+set_passwd ${host}
+[ $? -eq 0 ] || exit 2
+
+[ -z "${quota}" ] && readonly quota=${default_quota}
+set_quota ${host}
+[ $? -eq 0 ] || exit 2
+
+log "${success} User account ${user} created and configured"

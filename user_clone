@@ -1,0 +1,59 @@
+#!/bin/bash
+
+# @ act
+# TODO:
+# !!!! reuse [from/to] home dir (as specified in passwd), instead of hardcoded /home/XX ??
+# !!!! allow changing also uid
+
+log_facility="accounting"
+[ -z "${sysman_scripts_dir}" ] && readonly sysman_scripts_dir=$(dirname $0)
+[ -z "${SYSMAN_ETC}" ] && readonly SYSMAN_ETC=/etc/sysman
+[ -z "${SYSMAN_LOGDIR}" ] && readonly SYSMAN_LOGDIR=/var/log
+readonly log_file=${SYSMAN_LOGDIR}/sysman.log
+
+. ${sysman_scripts_dir}/misc.sh
+
+[ -n "${SM_USER}" ] && readonly SSH_USER="${SM_USER}@"
+
+print_usage(){
+    echo "Clone a user account from a server to another"
+    echo "Syntax: $0 -f from_host -H to_host -u username [-U new_username]"
+    echo "Example: "
+    echo "$0 -f old_server -H new_server -u johndoe -U jdoe"
+    exit 1
+}
+
+
+if [ "$#" -ge 6 ]; then
+    while getopts "f:H:u:U:" options; do
+        case "${options}" in
+            H)
+                readonly to_host=${OPTARG}
+                ;;
+            u)
+                readonly user=${OPTARG}
+                ;;
+            U)
+                new_user=${OPTARG}
+                ;;
+            f)
+                readonly from_host=${OPTARG}
+                ;;
+            *)
+                echo "Unknow option" 1>&2 
+                print_usage
+                ;;
+        esac
+    done
+else
+    print_usage
+fi
+
+[ -z "${new_user}" ] && new_user=${user}
+
+ssh ${SSH_USER}${from_host} "grep ${user}: /etc/passwd" | sed "s/${user}/${new_user}/g" | ssh  ${SSH_USER}${to_host} "cat >> /etc/passwd"
+ssh ${SSH_USER}${from_host} "grep ${user}: /etc/shadow" | sed "s/${user}/${new_user}/g" | ssh  ${SSH_USER}${to_host} "cat >> /etc/shadow"
+ssh ${SSH_USER}${to_host} "mkdir -p /home/${new_user}/.ssh ; chown -R ${new_user} /home/${new_user}"
+ssh ${SSH_USER}${from_host} "cat ~${user}/.ssh/authorized_keys" | ssh  ${SSH_USER}${to_host} "cat >> /home/${new_user}/.ssh/authorized_keys"
+
+log "${success} User account ${user}@${from_host} cloned as ${new_user}@${to_host}"
