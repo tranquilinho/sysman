@@ -8,13 +8,30 @@ readonly log_facility="nas"
 
 . ${sysman_scripts_dir}/misc.sh
 
-if [ $# -ne 1 ];then
-	echo "Syntax: $0 netrsc_path"
-	echo "Example: $0 /nas/backup/joe"
-	exit 1
-fi
+readonly syntax_error=1
 
-readonly netpath=$1
+print_usage(){
+    echo "Syntax:"
+    echo "   $0 -p path"
+    echo "Example:"
+    echo "   $0 -p /nas/backup/joe"
+    exit ${syntax_error}  
+}
+
+if [ "$#" -ge 1 ]; then
+    while getopts "p:h" options; do
+	case "${options}" in
+	    p)
+		readonly netpath=${OPTARG}
+		;;
+	    h)
+		print_usage
+		;;
+	esac
+    done
+else
+    print_usage
+fi
 
 log "${info} Removing ${netpath}"
 

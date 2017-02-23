@@ -20,7 +20,7 @@ skip_creation=0
 smallest_possible=0
 
 if [ "$#" -gt 0 ]; then
-    while getopts "f:t:p:v:l:RCs" options; do
+    while getopts "f:t:p:v:l:RCsh" options; do
 	case "${options}" in
 	    v)
 		readonly to_vg=${OPTARG}
@@ -49,7 +49,9 @@ if [ "$#" -gt 0 ]; then
 	    C)
 		skip_creation=1
 		;;
-
+	    h)
+		print_usage
+		;;
             *)
 		echo "Unknow option" 1>&2 
 		print_usage

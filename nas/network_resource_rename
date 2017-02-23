@@ -1,17 +1,44 @@
 #!/bin/bash
 
-# !!!! use named params
+readonly syntax_error=1
 
-if [ $# -ne 3 ]; then
+print_usage(){
     echo "Change the names \(volume and mount path\) of a local netrsc"
-    echo "Syntax: $0 old_netpath new_netpath new_lv_name"
-    echo "Example: $0 /nas/backup/joe /nas/archive/joe joe-archive"
-    exit 1
+    echo "Syntax:"
+    echo "   $0 -f old_path -t new_path -l new_lv_name"
+    echo "Example:"
+    echo "   $0 -f /nas/backup/joe -t /nas/archive/joe -l joe-archive"
+    exit ${syntax_error}  
+}
+
+
+if [ "$#" -gt 0 ]; then
+    while getopts "f:t:l:h" options; do
+	case "${options}" in
+	    l)
+		readonly newlvname=${OPTARG}
+		;;
+	    f)
+		readonly oldnetpath=${OPTARG}
+		;;
+	    t)
+		readonly newnetpath=${OPTARG}
+		;;
+	    h)
+		print_usage
+		;;
+            *)
+		echo "Unknow option" 1>&2 
+		print_usage
+		;;
+	esac
+    done
+    shift $((OPTIND-1))
+else
+    print_usage
 fi
 
-readonly oldnetpath=$1
-readonly newnetpath=$2
-readonly newlvname=$3
+[ -z "${oldnetpath}" -o -z "${newnetpath}" -o -z "${newlvname}" ] && print_usage
 
 echo "Resource NFS status:"
 showmount -a | grep ${oldnetpath}

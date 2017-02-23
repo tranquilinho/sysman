@@ -3,9 +3,17 @@
 [ -z "${sysman_scripts_dir}" ] && readonly sysman_scripts_dir=$(dirname $0)/..
 readonly scripts_base=/etc/sysman/san/netrsc
 
+readonly syntax_error=1
 
-if [ "$#" -lt 3 ]; then
-    while getopts "v:l:s:p:f:t:" options; do
+print_usage(){  
+    echo "Duplicate a network resource" 
+    echo "Syntax:  $0 -f tag_list     -v clone_vg -p clone_path [-l clone_lv]"
+    echo "Example: $0 -f work,joe,pc2 -v othervg  -p /nas/work/joe-clone -l joe-work-clone"
+    exit ${syntax_error}  
+}
+
+if [ "$#" -ge 1 ]; then
+    while getopts "v:l:s:p:f:t:h" options; do
 	case "${options}" in
             v)
 		readonly vg="${OPTARG}"
@@ -19,13 +27,13 @@ if [ "$#" -lt 3 ]; then
 	    f)
 		readonly tags="${OPTARG/,/ }"
 		;;
+	    h)
+		print_usage
+		;;
 	esac
     done
 else
-    echo "Duplicate a network resource" 
-    echo "Syntax:  $0 -f tag_list     -v clone_vg -p clone_path [-l clone_lv]"
-    echo "Example: $0 -f work,joe,pc2 -v othervg  -p /nas/work/joe-clone -l joe-work-clone"
-    exit 1
+    print_usage
 fi
 
 readonly old_lvpath=$(${sysman_scripts_dir}/nas/find_single_volume ${tags})

@@ -25,7 +25,7 @@ fstype="ext4"
 nfshosts="-"
 
 if [ "$#" -ge 8 ]; then
-    while getopts "v:l:s:p:f:t:H:" options; do
+    while getopts "v:l:s:p:f:t:H:h" options; do
 	case "${options}" in
             v)
 		readonly vg=${OPTARG}
@@ -47,6 +47,9 @@ if [ "$#" -ge 8 ]; then
 		;;
 	    H)
 		readonly nas_host=${OPTARG}
+		;;
+	    h)
+		print_usage
 		;;
 	esac
     done
