@@ -13,12 +13,12 @@
 readonly SERVICES_DIR=/etc/sysman/services/$(hostname -s)
 
 start() {
-    echo "Starting portable services"
+    echo "Starting services"
 
     # wait_for_docker? @see misc.sh
 
     for service in $( ls ${SERVICES_DIR}); do
-	${SERVICES_DIR}/${service} start
+	${SERVICES_DIR}/${service} start || echo "Error starting ${service}"
     done
     
     exit 0
@@ -27,7 +27,7 @@ start() {
 stop() {
     echo "Stopping portable services"
     for service in $( ls -r ${SERVICES_DIR}); do
-	${SERVICES_DIR}/${service} stop
+	${SERVICES_DIR}/${service} stop || echo "Error stopping ${service}"
     done
     
     exit 0
